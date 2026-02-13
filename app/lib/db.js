@@ -1,15 +1,24 @@
-import dotenv from 'dotenv';
+import mongoose from "mongoose";
 
-// Force reload and override
+const MONGODB_URI = `mongodb+srv://${process.env.USERNAME}:${process.env.PASSWORD}@eggshop0.xhexnj1.mongodb.net/eggdb?appName=eggshop0`;
 
-dotenv.config({ override: true });
+let cached = global.mongoose;
 
+if (!cached) {
+  cached = global.mongoose = { conn: null, promise: null };
+}
 
-export const { USERNAME, PASSWORD } = process.env
+async function connectDB() {
+  if (cached.conn) {
+    return cached.conn;
+  }
 
-export const connectdb=`mongodb+srv://${USERNAME}:${PASSWORD}@eggshop0.xhexnj1.mongodb.net/eggdb?appName=eggshop0`
+  if (!cached.promise) {
+    cached.promise = mongoose.connect(MONGODB_URI).then((mongoose) => mongoose);
+  }
 
+  cached.conn = await cached.promise;
+  return cached.conn;
+}
 
-console.log(USERNAME);
-console.log(PASSWORD);
-
+export default connectDB;
