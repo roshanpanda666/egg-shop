@@ -2,22 +2,33 @@ import mongoose from "mongoose";
 
 const EggSchema = new mongoose.Schema(
   {
-    eggPrice: {
+    cratePrice: {
       type: Number,
-      required: [true, "Egg price is required"],
+      required: [true, "Crate price is required"],
     },
-    eggsGot: {
+    cratesGot: {
       type: Number,
-      required: [true, "Eggs received count is required"],
+      required: [true, "Number of crates is required"],
+    },
+    eggsPerCrate: {
+      type: Number,
+      required: [true, "Eggs per crate is required"],
+      default: 30,
     },
     date: {
       type: Date,
       required: [true, "Date is required"],
     },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
   },
   { timestamps: true }
 );
 
-const Egg = mongoose.models.Egg || mongoose.model("Egg", EggSchema);
+if (mongoose.models.Egg) {
+  mongoose.deleteModel("Egg");
+}
 
-export default Egg;
+export default mongoose.model("Egg", EggSchema);

@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 export async function GET() {
   try {
     await connectDB();
-    const eggs = await Egg.find({}).sort({ date: -1 });
+    const eggs = await Egg.find({}).lean().sort({ date: -1 });
     return NextResponse.json({ success: true, data: eggs });
   } catch (error) {
     return NextResponse.json(
@@ -20,9 +20,9 @@ export async function POST(request) {
     await connectDB();
     const body = await request.json();
 
-    const { eggPrice, eggsGot, date } = body;
+    const { cratePrice, cratesGot, eggsPerCrate, date } = body;
 
-    if (!eggPrice || !eggsGot || !date) {
+    if (!cratePrice || !cratesGot || !eggsPerCrate || !date) {
       return NextResponse.json(
         { success: false, error: "All fields are required" },
         { status: 400 }
@@ -30,8 +30,9 @@ export async function POST(request) {
     }
 
     const egg = await Egg.create({
-      eggPrice: Number(eggPrice),
-      eggsGot: Number(eggsGot),
+      cratePrice: Number(cratePrice),
+      cratesGot: Number(cratesGot),
+      eggsPerCrate: Number(eggsPerCrate),
       date: new Date(date),
     });
 

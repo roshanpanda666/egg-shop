@@ -9,10 +9,14 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "dotenv": "^17.2.4",
+    "jspdf": "^4.1.0",
+    "jspdf-autotable": "^5.0.7",
     "mongodb": "^7.1.0",
     "mongoose": "^9.2.1",
     "next": "14.2.5",
+    "next-auth": "^4.24.13",
     "react": "^18",
     "react-dom": "^18"
   },
