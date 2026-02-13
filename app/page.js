@@ -84,6 +84,23 @@ export default function Home() {
     }
   }
 
+  async function handleDelete(id) {
+    if (!confirm("Are you sure you want to delete this entry?")) return;
+
+    try {
+      const res = await fetch(`/api/eggs?id=${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        setToast({ type: "success", message: "Entry deleted!" });
+        fetchEntries();
+      } else {
+        setToast({ type: "error", message: data.error || "Failed to delete" });
+      }
+    } catch (err) {
+      setToast({ type: "error", message: "Network error" });
+    }
+  }
+
   function formatDate(dateStr) {
     return new Date(dateStr).toLocaleDateString("en-IN", {
       day: "2-digit",
@@ -140,7 +157,6 @@ export default function Home() {
           </h2>
 
           <div className="space-y-5 relative">
-            {/* Crate Price */}
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">
                 Crate Price (₹)
@@ -157,7 +173,6 @@ export default function Home() {
               />
             </div>
 
-            {/* Crates Got */}
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">
                 Crates Got
@@ -173,7 +188,6 @@ export default function Home() {
               />
             </div>
 
-            {/* Eggs Per Crate */}
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">
                 Eggs Per Crate
@@ -210,7 +224,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Date */}
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">
                 Date
@@ -224,7 +237,6 @@ export default function Home() {
               />
             </div>
 
-            {/* Submit */}
             <button
               type="submit"
               disabled={submitting}
@@ -275,6 +287,7 @@ export default function Home() {
                   <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4">Total Eggs</th>
                   <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4">Per Egg</th>
                   <th className="text-right text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4">Total</th>
+                  <th className="text-center text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4"></th>
                 </tr>
               </thead>
               <tbody>
@@ -297,6 +310,17 @@ export default function Home() {
                       <td className="px-4 py-4 text-sm text-slate-300">{totalEggsRow}</td>
                       <td className="px-4 py-4 text-sm text-orange-400 font-medium">₹{perEggRow.toFixed(2)}</td>
                       <td className="px-4 py-4 text-sm text-emerald-400 font-medium text-right">₹{totalRow.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          onClick={() => handleDelete(entry._id)}
+                          className="text-red-400/60 hover:text-red-400 hover:bg-red-500/10 p-1.5 rounded-lg transition-all duration-200"
+                          title="Delete entry"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}

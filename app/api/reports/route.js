@@ -1,9 +1,15 @@
 import connectDB from "@/app/lib/db";
 import Egg from "@/app/models/Egg";
 import Sale from "@/app/models/Sale";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { NextResponse } from "next/server";
 
-// Helper: get total eggs from a purchase entry (handles old + new schema)
+async function getUserId() {
+  const session = await getServerSession(authOptions);
+  return session?.user?.id || null;
+}
+
 function getPurchaseEggs(p) {
   if (p.cratesGot != null && p.eggsPerCrate != null) {
     return p.cratesGot * p.eggsPerCrate;
@@ -18,47 +24,39 @@ function getPurchaseCost(p) {
   return (p.eggPrice || 0) * (p.eggsGot || 0);
 }
 
-// Helper: get total eggs from a sale entry (handles old + new schema + individual eggs)
 function getSaleEggs(s) {
   let total = 0;
-  // Crate eggs
   if (s.cratesSold != null && s.eggsPerCrate != null) {
     total += s.cratesSold * s.eggsPerCrate;
   } else if (s.eggsSold != null) {
-    // Old schema fallback (assuming eggsSold meant total eggs from crates in old version, 
-    // or just eggs. Context suggests cratesSold replaced eggsSold logic, but let's be safe)
     total += s.eggsSold;
   }
-  
-  // Individual eggs
   if (s.individualEggs != null) {
     total += s.individualEggs;
   }
-  
   return total;
 }
 
 function getSaleRevenue(s) {
   let total = 0;
-  // Crate revenue
   if (s.crateSalePrice != null && s.cratesSold != null) {
     total += s.crateSalePrice * s.cratesSold;
   } else if (s.salePrice != null && s.eggsSold != null) {
-    // Old schema fallback
     total += s.salePrice * s.eggsSold;
   }
-  
-  // Individual egg revenue
   if (s.individualEggs != null && s.eggSalePrice != null) {
     total += s.individualEggs * s.eggSalePrice;
   }
-  
   return total;
 }
 
 export async function GET(request) {
   try {
     await connectDB();
+    const userId = await getUserId();
+    if (!userId) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
 
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type");
@@ -77,17 +75,16 @@ export async function GET(request) {
       endDate = new Date(year, mon, 1);
     } else {
       return NextResponse.json(
-        { success: false, error: "Invalid report type. Use type=daily&date=YYYY-MM-DD or type=monthly&month=YYYY-MM" },
+        { success: false, error: "Invalid report type" },
         { status: 400 }
       );
     }
 
-    const dateFilter = { date: { $gte: startDate, $lt: endDate } };
+    const dateFilter = { date: { $gte: startDate, $lt: endDate }, userId };
 
     const purchases = await Egg.find(dateFilter).lean().sort({ date: -1 });
     const sales = await Sale.find(dateFilter).lean().sort({ date: -1 });
 
-    // Crate-level aggregates (only full crates)
     const totalCratesPurchased = purchases.reduce((sum, p) => sum + (p.cratesGot || 0), 0);
     const totalEggsPurchased = purchases.reduce((sum, p) => sum + getPurchaseEggs(p), 0);
     const totalPurchaseCost = purchases.reduce((sum, p) => sum + getPurchaseCost(p), 0);
@@ -97,14 +94,12 @@ export async function GET(request) {
     const totalSalesRevenue = sales.reduce((sum, s) => sum + getSaleRevenue(s), 0);
 
     const profit = totalSalesRevenue - totalPurchaseCost;
-
-    // Per-egg calculations
     const avgPurchasePricePerEgg = totalEggsPurchased > 0 ? totalPurchaseCost / totalEggsPurchased : 0;
     const avgSalePricePerEgg = totalEggsSold > 0 ? totalSalesRevenue / totalEggsSold : 0;
 
-    // Current overall stock
-    const allPurchases = await Egg.find({}).lean();
-    const allSales = await Sale.find({}).lean();
+    // Overall stock for this user
+    const allPurchases = await Egg.find({ userId }).lean();
+    const allSales = await Sale.find({ userId }).lean();
     const allEggsPurchased = allPurchases.reduce((sum, p) => sum + getPurchaseEggs(p), 0);
     const allEggsSold = allSales.reduce((sum, s) => sum + getSaleEggs(s), 0);
     const currentStockEggs = allEggsPurchased - allEggsSold;

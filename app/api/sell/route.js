@@ -1,9 +1,16 @@
 import connectDB from "@/app/lib/db";
 import Egg from "@/app/models/Egg";
 import Sale from "@/app/models/Sale";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { NextResponse } from "next/server";
 
-// Helper: get total eggs from a purchase entry (handles old + new schema)
+async function getUserId() {
+  const session = await getServerSession(authOptions);
+  return session?.user?.id || null;
+}
+
+// Helper: get total eggs from a purchase entry
 function getPurchaseEggs(p) {
   if (p.cratesGot != null && p.eggsPerCrate != null) {
     return p.cratesGot * p.eggsPerCrate;
@@ -11,7 +18,7 @@ function getPurchaseEggs(p) {
   return p.eggsGot || 0;
 }
 
-// Helper: get total eggs from a sale entry (handles old + new schema + individual eggs)
+// Helper: get total eggs from a sale entry
 function getSaleEggs(s) {
   let total = 0;
   if (s.cratesSold != null && s.eggsPerCrate != null) {
@@ -23,34 +30,25 @@ function getSaleEggs(s) {
   return total;
 }
 
-// Helper: get total revenue from a sale
-function getSaleRevenue(s) {
-  let total = 0;
-  if (s.crateSalePrice != null && s.cratesSold != null) {
-    total += s.crateSalePrice * s.cratesSold;
-  } else if (s.salePrice != null && s.eggsSold != null) {
-    total += s.salePrice * s.eggsSold;
-  }
-  total += (s.individualEggs || 0) * (s.eggSalePrice || 0);
-  return total;
-}
-
 export async function GET() {
   try {
     await connectDB();
-    const sales = await Sale.find({}).lean().sort({ date: -1 });
+    const userId = await getUserId();
+    if (!userId) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
 
-    // Calculate current stock in total eggs
-    const purchases = await Egg.find({}).lean();
+    const sales = await Sale.find({ userId }).lean().sort({ date: -1 });
+
+    // Calculate current stock for this user
+    const purchases = await Egg.find({ userId }).lean();
     const totalEggsPurchased = purchases.reduce(
-      (sum, p) => sum + getPurchaseEggs(p),
-      0
+      (sum, p) => sum + getPurchaseEggs(p), 0
     );
 
-    const allSales = await Sale.find({}).lean();
+    const allSales = await Sale.find({ userId }).lean();
     const totalEggsSold = allSales.reduce(
-      (sum, s) => sum + getSaleEggs(s),
-      0
+      (sum, s) => sum + getSaleEggs(s), 0
     );
 
     const currentStockEggs = totalEggsPurchased - totalEggsSold;
@@ -71,6 +69,11 @@ export async function GET() {
 export async function POST(request) {
   try {
     await connectDB();
+    const userId = await getUserId();
+    if (!userId) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { cratesSold, crateSalePrice, individualEggs, eggSalePrice, eggsPerCrate, date } = body;
 
@@ -94,7 +97,6 @@ export async function POST(request) {
       );
     }
 
-    // Validate that prices are provided for what's being sold
     if (numCrates > 0 && numCratePrice <= 0) {
       return NextResponse.json(
         { success: false, error: "Crate sale price is required when selling crates" },
@@ -109,17 +111,15 @@ export async function POST(request) {
       );
     }
 
-    // Calculate current stock in total eggs
-    const purchases = await Egg.find({}).lean();
+    // Calculate current stock for this user
+    const purchases = await Egg.find({ userId }).lean();
     const totalEggsPurchased = purchases.reduce(
-      (sum, p) => sum + getPurchaseEggs(p),
-      0
+      (sum, p) => sum + getPurchaseEggs(p), 0
     );
 
-    const allSales = await Sale.find({}).lean();
+    const allSales = await Sale.find({ userId }).lean();
     const totalEggsSold = allSales.reduce(
-      (sum, s) => sum + getSaleEggs(s),
-      0
+      (sum, s) => sum + getSaleEggs(s), 0
     );
 
     const currentStockEggs = totalEggsPurchased - totalEggsSold;
@@ -142,6 +142,7 @@ export async function POST(request) {
       eggSalePrice: numEggPrice,
       eggsPerCrate: numEPC,
       date: new Date(date),
+      userId,
     });
 
     return NextResponse.json(
@@ -152,6 +153,35 @@ export async function POST(request) {
       },
       { status: 201 }
     );
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request) {
+  try {
+    await connectDB();
+    const userId = await getUserId();
+    if (!userId) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: "Sale ID is required" }, { status: 400 });
+    }
+
+    const sale = await Sale.findOneAndDelete({ _id: id, userId });
+    if (!sale) {
+      return NextResponse.json({ success: false, error: "Sale not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, message: "Sale deleted" });
   } catch (error) {
     return NextResponse.json(
       { success: false, error: error.message },
