@@ -105,6 +105,7 @@ export default function Navbar() {
               >
                 Logout
               </button>
+
             </div>
           </div>
         )}
