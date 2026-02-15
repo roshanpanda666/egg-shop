@@ -35,19 +35,53 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { cratePrice, cratesGot, eggsPerCrate, date } = body;
+    const {
+      boxesGot, boxPrice, cratesPerBox,
+      cratePrice, cratesGot, eggsPerCrate, date
+    } = body;
 
-    if (!cratePrice || !cratesGot || !eggsPerCrate || !date) {
+    if (!date) {
       return NextResponse.json(
-        { success: false, error: "All fields are required" },
+        { success: false, error: "Date is required" },
+        { status: 400 }
+      );
+    }
+
+    const numBoxes = Number(boxesGot) || 0;
+    const numBoxPrice = Number(boxPrice) || 0;
+    const numCPB = Number(cratesPerBox) || 7;
+    const numCratePrice = Number(cratePrice) || 0;
+    const numCratesGot = Number(cratesGot) || 0;
+    const numEPC = Number(eggsPerCrate) || 30;
+
+    if (numBoxes === 0 && numCratesGot === 0) {
+      return NextResponse.json(
+        { success: false, error: "Enter boxes or crates purchased" },
+        { status: 400 }
+      );
+    }
+
+    if (numBoxes > 0 && numBoxPrice <= 0) {
+      return NextResponse.json(
+        { success: false, error: "Box price is required when purchasing boxes" },
+        { status: 400 }
+      );
+    }
+
+    if (numCratesGot > 0 && numCratePrice <= 0) {
+      return NextResponse.json(
+        { success: false, error: "Crate price is required when purchasing crates" },
         { status: 400 }
       );
     }
 
     const egg = await Egg.create({
-      cratePrice: Number(cratePrice),
-      cratesGot: Number(cratesGot),
-      eggsPerCrate: Number(eggsPerCrate),
+      boxesGot: numBoxes,
+      boxPrice: numBoxPrice,
+      cratesPerBox: numCPB,
+      cratePrice: numCratePrice,
+      cratesGot: numCratesGot,
+      eggsPerCrate: numEPC,
       date: new Date(date),
       userId,
     });

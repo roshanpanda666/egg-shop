@@ -2,13 +2,27 @@ import mongoose from "mongoose";
 
 const EggSchema = new mongoose.Schema(
   {
+    // Box-level purchase fields
+    boxesGot: {
+      type: Number,
+      default: 0,
+    },
+    boxPrice: {
+      type: Number,
+      default: 0,
+    },
+    cratesPerBox: {
+      type: Number,
+      default: 7,
+    },
+    // Crate-level purchase fields
     cratePrice: {
       type: Number,
-      required: [true, "Crate price is required"],
+      default: 0,
     },
     cratesGot: {
       type: Number,
-      required: [true, "Number of crates is required"],
+      default: 0,
     },
     eggsPerCrate: {
       type: Number,

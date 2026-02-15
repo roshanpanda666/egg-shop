@@ -11,26 +11,40 @@ async function getUserId() {
 }
 
 function getPurchaseEggs(p) {
-  if (p.cratesGot != null && p.eggsPerCrate != null) {
-    return p.cratesGot * p.eggsPerCrate;
+  let total = 0;
+  if (p.boxesGot != null && p.cratesPerBox != null && p.eggsPerCrate != null) {
+    total += p.boxesGot * p.cratesPerBox * p.eggsPerCrate;
   }
-  return p.eggsGot || 0;
+  if (p.cratesGot != null && p.eggsPerCrate != null) {
+    total += p.cratesGot * p.eggsPerCrate;
+  }
+  return total || p.eggsGot || 0;
 }
 
 function getPurchaseCost(p) {
-  if (p.cratePrice != null && p.cratesGot != null) {
-    return p.cratePrice * p.cratesGot;
+  let total = 0;
+  if (p.boxesGot != null && p.boxPrice != null) {
+    total += p.boxesGot * p.boxPrice;
   }
-  return (p.eggPrice || 0) * (p.eggsGot || 0);
+  if (p.cratePrice != null && p.cratesGot != null) {
+    total += p.cratePrice * p.cratesGot;
+  }
+  return total || (p.eggPrice || 0) * (p.eggsGot || 0);
 }
 
 function getSaleEggs(s) {
   let total = 0;
+  // Box eggs
+  if (s.boxesSold != null && s.cratesPerBox != null && s.eggsPerCrate != null) {
+    total += s.boxesSold * s.cratesPerBox * s.eggsPerCrate;
+  }
+  // Crate eggs
   if (s.cratesSold != null && s.eggsPerCrate != null) {
     total += s.cratesSold * s.eggsPerCrate;
   } else if (s.eggsSold != null) {
     total += s.eggsSold;
   }
+  // Loose eggs
   if (s.individualEggs != null) {
     total += s.individualEggs;
   }
@@ -39,11 +53,17 @@ function getSaleEggs(s) {
 
 function getSaleRevenue(s) {
   let total = 0;
+  // Box revenue
+  if (s.boxesSold != null && s.boxSalePrice != null) {
+    total += s.boxesSold * s.boxSalePrice;
+  }
+  // Crate revenue
   if (s.crateSalePrice != null && s.cratesSold != null) {
     total += s.crateSalePrice * s.cratesSold;
   } else if (s.salePrice != null && s.eggsSold != null) {
     total += s.salePrice * s.eggsSold;
   }
+  // Loose egg revenue
   if (s.individualEggs != null && s.eggSalePrice != null) {
     total += s.individualEggs * s.eggSalePrice;
   }
@@ -85,10 +105,12 @@ export async function GET(request) {
     const purchases = await Egg.find(dateFilter).lean().sort({ date: -1 });
     const sales = await Sale.find(dateFilter).lean().sort({ date: -1 });
 
+    const totalBoxesPurchased = purchases.reduce((sum, p) => sum + (p.boxesGot || 0), 0);
     const totalCratesPurchased = purchases.reduce((sum, p) => sum + (p.cratesGot || 0), 0);
     const totalEggsPurchased = purchases.reduce((sum, p) => sum + getPurchaseEggs(p), 0);
     const totalPurchaseCost = purchases.reduce((sum, p) => sum + getPurchaseCost(p), 0);
 
+    const totalBoxesSold = sales.reduce((sum, s) => sum + (s.boxesSold || 0), 0);
     const totalCratesSold = sales.reduce((sum, s) => sum + (s.cratesSold || 0), 0);
     const totalEggsSold = sales.reduce((sum, s) => sum + getSaleEggs(s), 0);
     const totalSalesRevenue = sales.reduce((sum, s) => sum + getSaleRevenue(s), 0);
@@ -109,10 +131,12 @@ export async function GET(request) {
       data: {
         type,
         period: type === "daily" ? date : month,
+        totalBoxesPurchased,
         totalCratesPurchased,
         totalEggsPurchased,
         totalPurchaseCost,
         avgPurchasePricePerEgg,
+        totalBoxesSold,
         totalCratesSold,
         totalEggsSold,
         totalSalesRevenue,

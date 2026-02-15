@@ -19,6 +19,10 @@ const UserSchema = new mongoose.Schema(
       type: Number,
       default: 30,
     },
+    cratesPerBox: {
+      type: Number,
+      default: 7,
+    },
   },
   { timestamps: true }
 );

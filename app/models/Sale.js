@@ -18,9 +18,26 @@ const SaleSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    boxesSold: {
+      type: Number,
+      default: 0,
+    },
+    boxSalePrice: {
+      type: Number,
+      default: 0,
+    },
+    cratesPerBox: {
+      type: Number,
+      default: 7,
+    },
     eggsPerCrate: {
       type: Number,
       default: 30,
+    },
+    paymentMethod: {
+      type: String,
+      enum: ["cash", "gpay", "phonepe", "upi_other"],
+      default: "cash",
     },
     date: {
       type: Date,

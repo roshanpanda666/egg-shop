@@ -8,7 +8,11 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
   const [defaultEggsPerCrate, setDefaultEggsPerCrate] = useState(30);
+  const [defaultCratesPerBox, setDefaultCratesPerBox] = useState(7);
   const [form, setForm] = useState({
+    boxesGot: "",
+    boxPrice: "",
+    cratesPerBox: "7",
     cratePrice: "",
     cratesGot: "",
     eggsPerCrate: "30",
@@ -33,7 +37,12 @@ export default function Home() {
       const data = await res.json();
       if (data.success) {
         setDefaultEggsPerCrate(data.data.eggsPerCrate);
-        setForm((f) => ({ ...f, eggsPerCrate: String(data.data.eggsPerCrate) }));
+        setDefaultCratesPerBox(data.data.cratesPerBox);
+        setForm((f) => ({
+          ...f,
+          eggsPerCrate: String(data.data.eggsPerCrate),
+          cratesPerBox: String(data.data.cratesPerBox),
+        }));
       }
     } catch (err) {
       console.error("Failed to fetch settings:", err);
@@ -68,6 +77,9 @@ export default function Home() {
       if (data.success) {
         setToast({ type: "success", message: "Entry added successfully!" });
         setForm({
+          boxesGot: "",
+          boxPrice: "",
+          cratesPerBox: String(defaultCratesPerBox),
           cratePrice: "",
           cratesGot: "",
           eggsPerCrate: String(defaultEggsPerCrate),
@@ -109,15 +121,28 @@ export default function Home() {
     });
   }
 
-  const totalEggs = form.cratesGot && form.eggsPerCrate
-    ? Number(form.cratesGot) * Number(form.eggsPerCrate)
-    : 0;
-  const pricePerEgg = form.cratePrice && form.eggsPerCrate && Number(form.eggsPerCrate) > 0
-    ? Number(form.cratePrice) / Number(form.eggsPerCrate)
-    : 0;
-  const totalCost = form.cratePrice && form.cratesGot
-    ? Number(form.cratePrice) * Number(form.cratesGot)
-    : 0;
+  const epc = Number(form.eggsPerCrate) || 1;
+  const cpb = Number(form.cratesPerBox) || 1;
+
+  // Box calculations
+  const numBoxes = Number(form.boxesGot) || 0;
+  const boxCrates = numBoxes * cpb;
+  const boxEggs = boxCrates * epc;
+  const boxTotalCost = numBoxes * (Number(form.boxPrice) || 0);
+
+  // Crate calculations
+  const numCrates = Number(form.cratesGot) || 0;
+  const crateEggs = numCrates * epc;
+  const crateTotalCost = numCrates * (Number(form.cratePrice) || 0);
+
+  // Combined totals
+  const totalEggs = boxEggs + crateEggs;
+  const totalCost = boxTotalCost + crateTotalCost;
+  const pricePerEgg = totalEggs > 0 ? totalCost / totalEggs : 0;
+
+  const hasBoxInput = form.boxesGot && form.boxPrice;
+  const hasCrateInput = form.cratePrice && form.cratesGot;
+  const showPreview = hasBoxInput || hasCrateInput;
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center px-4 py-10">
@@ -140,7 +165,7 @@ export default function Home() {
           📦 Stock Management
         </h1>
         <p className="text-slate-400 text-sm mt-2">
-          Track your egg crate purchases and inventory
+          Track your egg box and crate purchases
         </p>
       </div>
 
@@ -157,37 +182,89 @@ export default function Home() {
           </h2>
 
           <div className="space-y-5 relative">
-            <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">
-                Crate Price (₹)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                required
-                value={form.cratePrice}
-                onChange={(e) => setForm({ ...form, cratePrice: e.target.value })}
-                placeholder="e.g. 195.00"
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all duration-200"
-              />
+
+            {/* Box Purchases */}
+            <div className="space-y-4 pb-4 border-b border-white/10">
+              <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider">📦 Box Purchases</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">
+                    Boxes Got
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.boxesGot}
+                    onChange={(e) => setForm({ ...form, boxesGot: e.target.value })}
+                    placeholder="0"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all duration-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">
+                    Box Price (₹)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={form.boxPrice}
+                    onChange={(e) => setForm({ ...form, boxPrice: e.target.value })}
+                    placeholder="e.g. 1400.00"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all duration-200"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">
+                  Crates Per Box
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={form.cratesPerBox}
+                  onChange={(e) => setForm({ ...form, cratesPerBox: e.target.value })}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all duration-200"
+                />
+                <p className="text-xs text-slate-500 mt-1">1 box = {cpb} crates × {epc} eggs = {cpb * epc} eggs</p>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">
-                Crates Got
-              </label>
-              <input
-                type="number"
-                min="1"
-                required
-                value={form.cratesGot}
-                onChange={(e) => setForm({ ...form, cratesGot: e.target.value })}
-                placeholder="e.g. 5"
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all duration-200"
-              />
+            {/* Crate Purchases */}
+            <div className="space-y-4 pb-4 border-b border-white/10">
+              <h3 className="text-xs font-semibold text-orange-400 uppercase tracking-wider">🗃️ Crate Purchases</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">
+                    Crates Got
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.cratesGot}
+                    onChange={(e) => setForm({ ...form, cratesGot: e.target.value })}
+                    placeholder="0"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-all duration-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">
+                    Crate Price (₹)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={form.cratePrice}
+                    onChange={(e) => setForm({ ...form, cratePrice: e.target.value })}
+                    placeholder="e.g. 195.00"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-all duration-200"
+                  />
+                </div>
+              </div>
             </div>
 
+            {/* Eggs per Crate */}
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">
                 Eggs Per Crate
@@ -204,7 +281,7 @@ export default function Home() {
             </div>
 
             {/* Live Calculation Preview */}
-            {form.cratePrice && form.cratesGot && form.eggsPerCrate && (
+            {showPreview && (
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-4 space-y-2">
                 <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Calculation Preview</p>
                 <div className="grid grid-cols-3 gap-3">
@@ -221,6 +298,16 @@ export default function Home() {
                     <p className="text-lg font-bold text-amber-400">₹{totalCost.toFixed(2)}</p>
                   </div>
                 </div>
+                {numBoxes > 0 && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    📦 {numBoxes} box{numBoxes > 1 ? "es" : ""} = {boxCrates} crates = {boxEggs} eggs (₹{boxTotalCost.toFixed(2)})
+                  </p>
+                )}
+                {numCrates > 0 && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    🗃️ {numCrates} crate{numCrates > 1 ? "s" : ""} = {crateEggs} eggs (₹{crateTotalCost.toFixed(2)})
+                  </p>
+                )}
               </div>
             )}
 
@@ -259,7 +346,7 @@ export default function Home() {
       </div>
 
       {/* Entries Table */}
-      <div className="w-full max-w-4xl">
+      <div className="w-full max-w-5xl">
         <h2 className="text-lg font-semibold text-white/90 mb-4">
           Recent Entries
         </h2>
@@ -281,8 +368,8 @@ export default function Home() {
               <thead>
                 <tr className="border-b border-white/10">
                   <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4">Date</th>
-                  <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4">Crate Price</th>
-                  <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4">Crates</th>
+                  <th className="text-left text-xs font-medium text-amber-400 uppercase tracking-wider px-4 py-4">Boxes</th>
+                  <th className="text-left text-xs font-medium text-orange-400 uppercase tracking-wider px-4 py-4">Crates</th>
                   <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4">Eggs/Crate</th>
                   <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4">Total Eggs</th>
                   <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4">Per Egg</th>
@@ -292,10 +379,18 @@ export default function Home() {
               </thead>
               <tbody>
                 {entries.map((entry, i) => {
-                  const epc = entry.eggsPerCrate || 30;
-                  const totalEggsRow = entry.cratesGot * epc;
-                  const perEggRow = epc > 0 ? entry.cratePrice / epc : 0;
-                  const totalRow = entry.cratePrice * entry.cratesGot;
+                  const entryEpc = entry.eggsPerCrate || 30;
+                  const entryCpb = entry.cratesPerBox || 7;
+                  const entryBoxes = entry.boxesGot || 0;
+                  const entryCrates = entry.cratesGot || 0;
+                  const boxEggsRow = entryBoxes * entryCpb * entryEpc;
+                  const crateEggsRow = entryCrates * entryEpc;
+                  const totalEggsRow = boxEggsRow + crateEggsRow;
+                  const boxCostRow = entryBoxes * (entry.boxPrice || 0);
+                  const crateCostRow = entryCrates * (entry.cratePrice || 0);
+                  const totalCostRow = boxCostRow + crateCostRow;
+                  const perEggRow = totalEggsRow > 0 ? totalCostRow / totalEggsRow : 0;
+
                   return (
                     <tr
                       key={entry._id}
@@ -304,12 +399,16 @@ export default function Home() {
                       }`}
                     >
                       <td className="px-4 py-4 text-sm text-slate-300">{formatDate(entry.date)}</td>
-                      <td className="px-4 py-4 text-sm text-amber-400 font-medium">₹{Number(entry.cratePrice).toFixed(2)}</td>
-                      <td className="px-4 py-4 text-sm text-slate-300">{entry.cratesGot}</td>
-                      <td className="px-4 py-4 text-sm text-slate-300">{epc}</td>
+                      <td className="px-4 py-4 text-sm text-amber-300">
+                        {entryBoxes > 0 ? <span>{entryBoxes} <span className="text-slate-500 text-xs">(@ ₹{entry.boxPrice} · {entryCpb}cr/box)</span></span> : "-"}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-orange-300">
+                        {entryCrates > 0 ? <span>{entryCrates} <span className="text-slate-500 text-xs">(@ ₹{Number(entry.cratePrice).toFixed(2)})</span></span> : "-"}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-slate-300">{entryEpc}</td>
                       <td className="px-4 py-4 text-sm text-slate-300">{totalEggsRow}</td>
                       <td className="px-4 py-4 text-sm text-orange-400 font-medium">₹{perEggRow.toFixed(2)}</td>
-                      <td className="px-4 py-4 text-sm text-emerald-400 font-medium text-right">₹{totalRow.toFixed(2)}</td>
+                      <td className="px-4 py-4 text-sm text-emerald-400 font-medium text-right">₹{totalCostRow.toFixed(2)}</td>
                       <td className="px-4 py-3 text-center">
                         <button
                           onClick={() => handleDelete(entry._id)}

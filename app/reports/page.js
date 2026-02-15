@@ -2,6 +2,13 @@
 
 import { useState, useEffect } from "react";
 
+const PAYMENT_LABELS = {
+  cash: "💵 Cash",
+  gpay: "📱 Google Pay",
+  phonepe: "📱 PhonePe",
+  upi_other: "📱 Other UPI",
+};
+
 export default function ReportsPage() {
   const [reportType, setReportType] = useState("daily");
   const [selectedDate, setSelectedDate] = useState(
@@ -71,10 +78,12 @@ export default function ReportsPage() {
     let y = 45;
 
     const summaryData = [
+      ["Boxes Purchased", (report.totalBoxesPurchased || 0).toString()],
       ["Crates Purchased", report.totalCratesPurchased.toString()],
       ["Total Eggs Purchased", report.totalEggsPurchased.toString()],
       ["Purchase Cost", `Rs. ${report.totalPurchaseCost.toFixed(2)}`],
       ["Avg. Cost per Egg", `Rs. ${report.avgPurchasePricePerEgg.toFixed(2)}`],
+      ["Boxes Sold", (report.totalBoxesSold || 0).toString()],
       ["Crates Sold", report.totalCratesSold.toString()],
       ["Total Eggs Sold", report.totalEggsSold.toString()],
       ["Sales Revenue", `Rs. ${report.totalSalesRevenue.toFixed(2)}`],
@@ -103,17 +112,22 @@ export default function ReportsPage() {
 
       doc.autoTable({
         startY: y,
-        head: [["Date", "Crate Price", "Crates", "Eggs/Crate", "Total Eggs", "Per Egg", "Total"]],
+        head: [["Date", "Boxes", "Crates", "Total Eggs", "Per Egg", "Total"]],
         body: report.purchases.map((p) => {
           const epc = p.eggsPerCrate || 30;
+          const cpb = p.cratesPerBox || 7;
+          const pb = p.boxesGot || 0;
+          const pc = p.cratesGot || 0;
+          const totalEggs = (pb * cpb * epc) + (pc * epc);
+          const totalCost = (pb * (p.boxPrice || 0)) + (pc * (p.cratePrice || 0));
+          const perEgg = totalEggs > 0 ? totalCost / totalEggs : 0;
           return [
             formatDate(p.date),
-            `Rs. ${Number(p.cratePrice).toFixed(2)}`,
-            p.cratesGot.toString(),
-            epc.toString(),
-            (p.cratesGot * epc).toString(),
-            `Rs. ${(p.cratePrice / epc).toFixed(2)}`,
-            `Rs. ${(p.cratePrice * p.cratesGot).toFixed(2)}`,
+            pb > 0 ? `${pb} (@ Rs.${p.boxPrice} · ${cpb}cr/box)` : "-",
+            pc > 0 ? `${pc} (@ Rs.${Number(p.cratePrice).toFixed(2)})` : "-",
+            totalEggs.toString(),
+            `Rs. ${perEgg.toFixed(2)}`,
+            `Rs. ${totalCost.toFixed(2)}`,
           ];
         }),
         theme: "striped",
@@ -132,17 +146,28 @@ export default function ReportsPage() {
 
       doc.autoTable({
         startY: y,
-        head: [["Date", "Crate Price", "Crates", "Eggs/Crate", "Total Eggs", "Per Egg", "Total"]],
+        head: [["Date", "Boxes", "Crates", "Loose", "Total Eggs", "Revenue", "Payment"]],
         body: report.sales.map((s) => {
           const epc = s.eggsPerCrate || 30;
+          const cpb = s.cratesPerBox || 7;
+          const sb = s.boxesSold || 0;
+          const sc = s.cratesSold || 0;
+          const sl = s.individualEggs || 0;
+          const boxRev = sb * (s.boxSalePrice || 0);
+          const crateRev = sc * (s.crateSalePrice || 0);
+          const looseRev = sl * (s.eggSalePrice || 0);
+          const totalRev = boxRev + crateRev + looseRev;
+          const totalEggs = (sb * cpb * epc) + (sc * epc) + sl;
+          const payLabel = (PAYMENT_LABELS[s.paymentMethod] || "Cash").replace(/[📱💵]/g, "").trim();
+
           return [
             formatDate(s.date),
-            `Rs. ${Number(s.crateSalePrice).toFixed(2)}`,
-            s.cratesSold.toString(),
-            epc.toString(),
-            (s.cratesSold * epc).toString(),
-            `Rs. ${(s.crateSalePrice / epc).toFixed(2)}`,
-            `Rs. ${(s.crateSalePrice * s.cratesSold).toFixed(2)}`,
+            sb > 0 ? `${sb} (@ Rs.${s.boxSalePrice})` : "-",
+            sc > 0 ? `${sc} (@ Rs.${s.crateSalePrice})` : "-",
+            sl > 0 ? `${sl} (@ Rs.${s.eggSalePrice})` : "-",
+            totalEggs.toString(),
+            `Rs. ${totalRev.toFixed(2)}`,
+            payLabel,
           ];
         }),
         theme: "striped",
@@ -309,10 +334,12 @@ export default function ReportsPage() {
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {[
-              { label: "Crates Purchased", value: report.totalCratesPurchased, icon: "📦", color: "amber" },
+              { label: "Boxes Purchased", value: report.totalBoxesPurchased || 0, icon: "📦", color: "amber" },
+              { label: "Crates Purchased", value: report.totalCratesPurchased, icon: "🗃️", color: "amber" },
               { label: "Eggs Purchased", value: report.totalEggsPurchased, icon: "🥚", color: "amber" },
               { label: "Purchase Cost", value: `₹${report.totalPurchaseCost.toFixed(2)}`, icon: "💸", color: "amber" },
               { label: "Avg Cost/Egg", value: `₹${report.avgPurchasePricePerEgg.toFixed(2)}`, icon: "🏷️", color: "orange" },
+              { label: "Boxes Sold", value: report.totalBoxesSold || 0, icon: "📦", color: "amber" },
               { label: "Crates Sold", value: report.totalCratesSold, icon: "🛒", color: "emerald" },
               { label: "Eggs Sold", value: report.totalEggsSold, icon: "🥚", color: "emerald" },
               { label: "Revenue", value: `₹${report.totalSalesRevenue.toFixed(2)}`, icon: "💰", color: "emerald" },
@@ -364,9 +391,9 @@ export default function ReportsPage() {
                   <thead>
                     <tr className="border-b border-white/10">
                       <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-3">Date</th>
-                      <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-3">Crate Price</th>
-                      <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-3">Crates</th>
-                      <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-3">Eggs/Crate</th>
+                      <th className="text-left text-xs font-medium text-amber-400 uppercase tracking-wider px-4 py-3">Boxes</th>
+                      <th className="text-left text-xs font-medium text-orange-400 uppercase tracking-wider px-4 py-3">Crates</th>
+                      <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-3">Total Eggs</th>
                       <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-3">Per Egg</th>
                       <th className="text-right text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-3">Total</th>
                     </tr>
@@ -374,14 +401,28 @@ export default function ReportsPage() {
                   <tbody>
                     {report.purchases.map((p, i) => {
                       const epc = p.eggsPerCrate || 30;
+                      const cpb = p.cratesPerBox || 7;
+                      const pb = p.boxesGot || 0;
+                      const pc = p.cratesGot || 0;
+                      const boxEggs = pb * cpb * epc;
+                      const crateEggs = pc * epc;
+                      const totalEggs = boxEggs + crateEggs;
+                      const boxCost = pb * (p.boxPrice || 0);
+                      const crateCost = pc * (p.cratePrice || 0);
+                      const totalCost = boxCost + crateCost;
+                      const perEgg = totalEggs > 0 ? totalCost / totalEggs : 0;
                       return (
                         <tr key={p._id} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${i % 2 === 0 ? "bg-white/[0.02]" : ""}`}>
                           <td className="px-4 py-3 text-sm text-slate-300">{formatDate(p.date)}</td>
-                          <td className="px-4 py-3 text-sm text-amber-400 font-medium">₹{Number(p.cratePrice).toFixed(2)}</td>
-                          <td className="px-4 py-3 text-sm text-slate-300">{p.cratesGot}</td>
-                          <td className="px-4 py-3 text-sm text-slate-300">{epc}</td>
-                          <td className="px-4 py-3 text-sm text-orange-400 font-medium">₹{(p.cratePrice / epc).toFixed(2)}</td>
-                          <td className="px-4 py-3 text-sm text-amber-400 font-medium text-right">₹{(p.cratePrice * p.cratesGot).toFixed(2)}</td>
+                          <td className="px-4 py-3 text-sm text-amber-300">
+                            {pb > 0 ? <span>{pb} <span className="text-slate-500 text-xs">(@ ₹{p.boxPrice} · {cpb}cr/box)</span></span> : "-"}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-orange-300">
+                            {pc > 0 ? <span>{pc} <span className="text-slate-500 text-xs">(@ ₹{Number(p.cratePrice).toFixed(2)})</span></span> : "-"}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-300">{totalEggs}</td>
+                          <td className="px-4 py-3 text-sm text-orange-400 font-medium">₹{perEgg.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-sm text-amber-400 font-medium text-right">₹{totalCost.toFixed(2)}</td>
                         </tr>
                       );
                     })}
@@ -402,24 +443,46 @@ export default function ReportsPage() {
                   <thead>
                     <tr className="border-b border-white/10">
                       <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-3">Date</th>
-                      <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-3">Crate Price</th>
-                      <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-3">Crates</th>
-                      <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-3">Eggs/Crate</th>
-                      <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-3">Per Egg</th>
-                      <th className="text-right text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-3">Total</th>
+                      <th className="text-left text-xs font-medium text-amber-400 uppercase tracking-wider px-4 py-3">Boxes</th>
+                      <th className="text-left text-xs font-medium text-emerald-400 uppercase tracking-wider px-4 py-3">Crates</th>
+                      <th className="text-left text-xs font-medium text-teal-400 uppercase tracking-wider px-4 py-3">Loose</th>
+                      <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-3">Total Eggs</th>
+                      <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-3">Payment</th>
+                      <th className="text-right text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-3">Revenue</th>
                     </tr>
                   </thead>
                   <tbody>
                     {report.sales.map((s, i) => {
                       const epc = s.eggsPerCrate || 30;
+                      const cpb = s.cratesPerBox || 7;
+                      const sb = s.boxesSold || 0;
+                      const sc = s.cratesSold || 0;
+                      const sl = s.individualEggs || 0;
+                      const boxRev = sb * (s.boxSalePrice || 0);
+                      const crateRev = sc * (s.crateSalePrice || 0);
+                      const looseRev = sl * (s.eggSalePrice || 0);
+                      const totalRev = boxRev + crateRev + looseRev;
+                      const totalEggs = (sb * cpb * epc) + (sc * epc) + sl;
+
                       return (
                         <tr key={s._id} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${i % 2 === 0 ? "bg-white/[0.02]" : ""}`}>
                           <td className="px-4 py-3 text-sm text-slate-300">{formatDate(s.date)}</td>
-                          <td className="px-4 py-3 text-sm text-emerald-400 font-medium">₹{Number(s.crateSalePrice).toFixed(2)}</td>
-                          <td className="px-4 py-3 text-sm text-slate-300">{s.cratesSold}</td>
-                          <td className="px-4 py-3 text-sm text-slate-300">{epc}</td>
-                          <td className="px-4 py-3 text-sm text-teal-400 font-medium">₹{(s.crateSalePrice / epc).toFixed(2)}</td>
-                          <td className="px-4 py-3 text-sm text-emerald-400 font-medium text-right">₹{(s.crateSalePrice * s.cratesSold).toFixed(2)}</td>
+                          <td className="px-4 py-3 text-sm text-amber-300">
+                            {sb > 0 ? <span>{sb} <span className="text-slate-500 text-xs">(@ ₹{s.boxSalePrice})</span></span> : "-"}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-emerald-300">
+                            {sc > 0 ? <span>{sc} <span className="text-slate-500 text-xs">(@ ₹{s.crateSalePrice})</span></span> : "-"}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-teal-300">
+                            {sl > 0 ? <span>{sl} <span className="text-slate-500 text-xs">(@ ₹{s.eggSalePrice})</span></span> : "-"}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-300">{totalEggs}</td>
+                          <td className="px-4 py-3 text-sm text-slate-300">
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 text-xs font-medium">
+                              {PAYMENT_LABELS[s.paymentMethod] || "💵 Cash"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-emerald-400 font-bold text-right">₹{totalRev.toFixed(2)}</td>
                         </tr>
                       );
                     })}

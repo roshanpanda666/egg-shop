@@ -10,22 +10,34 @@ async function getUserId() {
   return session?.user?.id || null;
 }
 
-// Helper: get total eggs from a purchase entry
+// Helper: get total eggs from a purchase entry (includes boxes + crates)
 function getPurchaseEggs(p) {
-  if (p.cratesGot != null && p.eggsPerCrate != null) {
-    return p.cratesGot * p.eggsPerCrate;
+  let total = 0;
+  // Box eggs
+  if (p.boxesGot != null && p.cratesPerBox != null && p.eggsPerCrate != null) {
+    total += p.boxesGot * p.cratesPerBox * p.eggsPerCrate;
   }
-  return p.eggsGot || 0;
+  // Crate eggs
+  if (p.cratesGot != null && p.eggsPerCrate != null) {
+    total += p.cratesGot * p.eggsPerCrate;
+  }
+  return total || p.eggsGot || 0;
 }
 
-// Helper: get total eggs from a sale entry
+// Helper: get total eggs from a sale entry (includes boxes + crates + loose)
 function getSaleEggs(s) {
   let total = 0;
+  // Box eggs
+  if (s.boxesSold != null && s.cratesPerBox != null && s.eggsPerCrate != null) {
+    total += s.boxesSold * s.cratesPerBox * s.eggsPerCrate;
+  }
+  // Crate eggs
   if (s.cratesSold != null && s.eggsPerCrate != null) {
     total += s.cratesSold * s.eggsPerCrate;
   } else if (s.eggsSold != null) {
     total += s.eggsSold;
   }
+  // Loose eggs
   total += s.individualEggs || 0;
   return total;
 }
@@ -75,7 +87,12 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { cratesSold, crateSalePrice, individualEggs, eggSalePrice, eggsPerCrate, date } = body;
+    const {
+      cratesSold, crateSalePrice,
+      individualEggs, eggSalePrice,
+      boxesSold, boxSalePrice, cratesPerBox,
+      eggsPerCrate, date, paymentMethod
+    } = body;
 
     if (!date) {
       return NextResponse.json(
@@ -86,13 +103,19 @@ export async function POST(request) {
 
     const numCrates = Number(cratesSold) || 0;
     const numIndividual = Number(individualEggs) || 0;
+    const numBoxes = Number(boxesSold) || 0;
     const numEPC = Number(eggsPerCrate) || 30;
+    const numCPB = Number(cratesPerBox) || 7;
     const numCratePrice = Number(crateSalePrice) || 0;
     const numEggPrice = Number(eggSalePrice) || 0;
+    const numBoxPrice = Number(boxSalePrice) || 0;
+    const payment = ["cash", "gpay", "phonepe", "upi_other"].includes(paymentMethod)
+      ? paymentMethod
+      : "cash";
 
-    if (numCrates === 0 && numIndividual === 0) {
+    if (numCrates === 0 && numIndividual === 0 && numBoxes === 0) {
       return NextResponse.json(
-        { success: false, error: "Enter crates or individual eggs to sell" },
+        { success: false, error: "Enter boxes, crates, or individual eggs to sell" },
         { status: 400 }
       );
     }
@@ -111,6 +134,13 @@ export async function POST(request) {
       );
     }
 
+    if (numBoxes > 0 && numBoxPrice <= 0) {
+      return NextResponse.json(
+        { success: false, error: "Box sale price is required when selling boxes" },
+        { status: 400 }
+      );
+    }
+
     // Calculate current stock for this user
     const purchases = await Egg.find({ userId }).lean();
     const totalEggsPurchased = purchases.reduce(
@@ -123,7 +153,9 @@ export async function POST(request) {
     );
 
     const currentStockEggs = totalEggsPurchased - totalEggsSold;
-    const totalEggsToSell = numCrates * numEPC + numIndividual;
+    const boxEggs = numBoxes * numCPB * numEPC;
+    const crateEggs = numCrates * numEPC;
+    const totalEggsToSell = boxEggs + crateEggs + numIndividual;
 
     if (totalEggsToSell > currentStockEggs) {
       return NextResponse.json(
@@ -140,7 +172,11 @@ export async function POST(request) {
       crateSalePrice: numCratePrice,
       individualEggs: numIndividual,
       eggSalePrice: numEggPrice,
+      boxesSold: numBoxes,
+      boxSalePrice: numBoxPrice,
+      cratesPerBox: numCPB,
       eggsPerCrate: numEPC,
+      paymentMethod: payment,
       date: new Date(date),
       userId,
     });

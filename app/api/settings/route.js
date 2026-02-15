@@ -16,11 +16,14 @@ export async function GET() {
     }
 
     await connectDB();
-    const user = await User.findById(session.user.id).select("eggsPerCrate");
+    const user = await User.findById(session.user.id).select("eggsPerCrate cratesPerBox");
 
     return NextResponse.json({
       success: true,
-      data: { eggsPerCrate: user?.eggsPerCrate || 30 },
+      data: {
+        eggsPerCrate: user?.eggsPerCrate || 30,
+        cratesPerBox: user?.cratesPerBox || 7,
+      },
     });
   } catch (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -36,18 +39,48 @@ export async function PUT(request) {
 
     await connectDB();
     const body = await request.json();
-    const { eggsPerCrate } = body;
+    const { eggsPerCrate, cratesPerBox } = body;
 
-    if (!eggsPerCrate || eggsPerCrate < 1) {
+    const update = {};
+
+    if (eggsPerCrate !== undefined) {
+      if (eggsPerCrate < 1) {
+        return NextResponse.json(
+          { success: false, error: "Eggs per crate must be at least 1" },
+          { status: 400 }
+        );
+      }
+      update.eggsPerCrate = Number(eggsPerCrate);
+    }
+
+    if (cratesPerBox !== undefined) {
+      if (cratesPerBox < 1) {
+        return NextResponse.json(
+          { success: false, error: "Crates per box must be at least 1" },
+          { status: 400 }
+        );
+      }
+      update.cratesPerBox = Number(cratesPerBox);
+    }
+
+    if (Object.keys(update).length === 0) {
       return NextResponse.json(
-        { success: false, error: "Eggs per crate must be at least 1" },
+        { success: false, error: "No valid settings provided" },
         { status: 400 }
       );
     }
 
-    await User.findByIdAndUpdate(session.user.id, { eggsPerCrate: Number(eggsPerCrate) });
+    await User.findByIdAndUpdate(session.user.id, update);
 
-    return NextResponse.json({ success: true, data: { eggsPerCrate: Number(eggsPerCrate) } });
+    const user = await User.findById(session.user.id).select("eggsPerCrate cratesPerBox");
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        eggsPerCrate: user?.eggsPerCrate || 30,
+        cratesPerBox: user?.cratesPerBox || 7,
+      },
+    });
   } catch (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

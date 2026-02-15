@@ -2,6 +2,18 @@
 
 import { useState, useEffect } from "react";
 
+const PAYMENT_METHODS = [
+  { value: "cash", label: "💵 Cash", color: "emerald" },
+  { value: "gpay", label: "📱 Google Pay", color: "blue" },
+  { value: "phonepe", label: "📱 PhonePe", color: "purple" },
+  { value: "upi_other", label: "📱 Other UPI", color: "cyan" },
+];
+
+function getPaymentLabel(method) {
+  const found = PAYMENT_METHODS.find((m) => m.value === method);
+  return found ? found.label : "💵 Cash";
+}
+
 export default function SellPage() {
   const [sales, setSales] = useState([]);
   const [currentStockEggs, setCurrentStockEggs] = useState(0);
@@ -9,12 +21,17 @@ export default function SellPage() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
   const [defaultEggsPerCrate, setDefaultEggsPerCrate] = useState(30);
+  const [defaultCratesPerBox, setDefaultCratesPerBox] = useState(7);
   const [form, setForm] = useState({
+    boxesSold: "",
+    boxSalePrice: "",
+    cratesPerBox: "7",
     cratesSold: "",
     crateSalePrice: "",
     individualEggs: "",
     eggSalePrice: "",
     eggsPerCrate: "30",
+    paymentMethod: "cash",
     date: new Date().toISOString().split("T")[0],
   });
 
@@ -36,7 +53,12 @@ export default function SellPage() {
       const data = await res.json();
       if (data.success) {
         setDefaultEggsPerCrate(data.data.eggsPerCrate);
-        setForm((f) => ({ ...f, eggsPerCrate: String(data.data.eggsPerCrate) }));
+        setDefaultCratesPerBox(data.data.cratesPerBox);
+        setForm((f) => ({
+          ...f,
+          eggsPerCrate: String(data.data.eggsPerCrate),
+          cratesPerBox: String(data.data.cratesPerBox),
+        }));
       }
     } catch (err) {
       console.error("Failed to fetch settings:", err);
@@ -74,11 +96,15 @@ export default function SellPage() {
       if (data.success) {
         setToast({ type: "success", message: `Sale recorded successfully!` });
         setForm({
+          boxesSold: "",
+          boxSalePrice: "",
+          cratesPerBox: String(defaultCratesPerBox),
           cratesSold: "",
           crateSalePrice: "",
           individualEggs: "",
           eggSalePrice: "",
           eggsPerCrate: String(defaultEggsPerCrate),
+          paymentMethod: "cash",
           date: new Date().toISOString().split("T")[0],
         });
         fetchSales();
@@ -118,14 +144,20 @@ export default function SellPage() {
   }
 
   const epc = Number(form.eggsPerCrate) || 1;
+  const cpb = Number(form.cratesPerBox) || 1;
   const stockCrates = Math.floor(currentStockEggs / epc);
+  const stockBoxes = Math.floor(stockCrates / cpb);
 
+  const boxes = Number(form.boxesSold) || 0;
   const crates = Number(form.cratesSold) || 0;
   const looseEggs = Number(form.individualEggs) || 0;
-  const totalEggsToSell = (crates * epc) + looseEggs;
+  const boxEggs = boxes * cpb * epc;
+  const crateEggs = crates * epc;
+  const totalEggsToSell = boxEggs + crateEggs + looseEggs;
+  const boxRevenue = boxes * (Number(form.boxSalePrice) || 0);
   const crateRevenue = crates * (Number(form.crateSalePrice) || 0);
   const looseEggRevenue = looseEggs * (Number(form.eggSalePrice) || 0);
-  const totalRevenue = crateRevenue + looseEggRevenue;
+  const totalRevenue = boxRevenue + crateRevenue + looseEggRevenue;
   const effectivePricePerEgg = totalEggsToSell > 0 ? totalRevenue / totalEggsToSell : 0;
 
   return (
@@ -149,7 +181,7 @@ export default function SellPage() {
           💰 Sell Eggs
         </h1>
         <p className="text-slate-400 text-sm mt-2">
-          Record crate and individual egg sales
+          Record box, crate, and individual egg sales
         </p>
       </div>
 
@@ -161,7 +193,9 @@ export default function SellPage() {
             <div>
               <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Current Stock</p>
               <p className="text-3xl font-bold text-white">{loading ? "..." : `${currentStockEggs} eggs`}</p>
-              <p className="text-sm text-slate-400 mt-1">{loading ? "" : `≈ ${stockCrates} crates (at ${epc} eggs/crate)`}</p>
+              <p className="text-sm text-slate-400 mt-1">
+                {loading ? "" : `≈ ${stockBoxes} boxes · ${stockCrates} crates (${cpb} crates/box · ${epc} eggs/crate)`}
+              </p>
             </div>
             <div className={`text-5xl ${currentStockEggs > 100 ? "opacity-100" : currentStockEggs > 30 ? "opacity-70" : "opacity-40"}`}>🥚</div>
           </div>
@@ -180,6 +214,27 @@ export default function SellPage() {
           <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none" />
           <h2 className="text-lg font-semibold text-white/90 mb-6 relative">Record Sale</h2>
           <div className="space-y-5 relative">
+
+            {/* Box Sales */}
+            <div className="space-y-4 pb-4 border-b border-white/10">
+              <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider">📦 Box Sales</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Boxes</label>
+                  <input type="number" min="0" value={form.boxesSold} onChange={(e) => setForm({ ...form, boxesSold: e.target.value })} placeholder="0" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all duration-200" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Price / Box (₹)</label>
+                  <input type="number" step="0.01" min="0" value={form.boxSalePrice} onChange={(e) => setForm({ ...form, boxSalePrice: e.target.value })} placeholder="1500.00" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all duration-200" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Crates Per Box</label>
+                <input type="number" min="1" value={form.cratesPerBox} onChange={(e) => setForm({ ...form, cratesPerBox: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all duration-200" />
+                <p className="text-xs text-slate-500 mt-1">1 box = {cpb} crates × {epc} eggs = {cpb * epc} eggs</p>
+              </div>
+            </div>
+
             {/* Crate Sales */}
             <div className="space-y-4 pb-4 border-b border-white/10">
               <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Crate Sales</h3>
@@ -216,8 +271,35 @@ export default function SellPage() {
               <input type="number" min="1" required value={form.eggsPerCrate} onChange={(e) => setForm({ ...form, eggsPerCrate: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all duration-200" />
             </div>
 
+            {/* Payment Method */}
+            <div className="pb-4 border-b border-white/10">
+              <label className="block text-xs font-medium text-slate-400 mb-3 uppercase tracking-wider">Payment Method</label>
+              <div className="grid grid-cols-2 gap-2">
+                {PAYMENT_METHODS.map((pm) => (
+                  <button
+                    key={pm.value}
+                    type="button"
+                    onClick={() => setForm({ ...form, paymentMethod: pm.value })}
+                    className={`py-2.5 px-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                      form.paymentMethod === pm.value
+                        ? pm.color === "emerald"
+                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-inner shadow-emerald-500/10"
+                          : pm.color === "blue"
+                          ? "bg-blue-500/20 text-blue-300 border border-blue-500/30 shadow-inner shadow-blue-500/10"
+                          : pm.color === "purple"
+                          ? "bg-purple-500/20 text-purple-300 border border-purple-500/30 shadow-inner shadow-purple-500/10"
+                          : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-inner shadow-cyan-500/10"
+                        : "bg-white/5 text-slate-400 border border-white/10 hover:bg-white/10"
+                    }`}
+                  >
+                    {pm.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Preview */}
-            {(crates > 0 || looseEggs > 0) && (
+            {(boxes > 0 || crates > 0 || looseEggs > 0) && (
               <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-4">
                 <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Sale Preview</p>
                 <div className="grid grid-cols-3 gap-3">
@@ -234,6 +316,21 @@ export default function SellPage() {
                     <p className="text-lg font-bold text-emerald-400">₹{totalRevenue.toFixed(2)}</p>
                   </div>
                 </div>
+                {boxes > 0 && (
+                  <p className="text-xs text-slate-500 mt-2">
+                    📦 {boxes} box{boxes > 1 ? "es" : ""} = {boxEggs} eggs (₹{boxRevenue.toFixed(2)})
+                  </p>
+                )}
+                {crates > 0 && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    🗃️ {crates} crate{crates > 1 ? "s" : ""} = {crateEggs} eggs (₹{crateRevenue.toFixed(2)})
+                  </p>
+                )}
+                {looseEggs > 0 && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    🥚 {looseEggs} loose egg{looseEggs > 1 ? "s" : ""} (₹{looseEggRevenue.toFixed(2)})
+                  </p>
+                )}
               </div>
             )}
 
@@ -246,7 +343,7 @@ export default function SellPage() {
             {/* Submit */}
             <button
               type="submit"
-              disabled={submitting || currentStockEggs <= 0 || (crates === 0 && looseEggs === 0)}
+              disabled={submitting || currentStockEggs <= 0 || (boxes === 0 && crates === 0 && looseEggs === 0)}
               className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-semibold py-3 rounded-xl shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
             >
               {submitting ? (
@@ -261,7 +358,7 @@ export default function SellPage() {
       </div>
 
       {/* Sales History */}
-      <div className="w-full max-w-5xl">
+      <div className="w-full max-w-6xl">
         <h2 className="text-lg font-semibold text-white/90 mb-4">Sales History</h2>
 
         {loading ? (
@@ -278,10 +375,12 @@ export default function SellPage() {
               <thead>
                 <tr className="border-b border-white/10">
                   <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4">Date</th>
+                  <th className="text-left text-xs font-medium text-amber-400 uppercase tracking-wider px-4 py-4">Boxes</th>
                   <th className="text-left text-xs font-medium text-emerald-400 uppercase tracking-wider px-4 py-4">Crates</th>
-                  <th className="text-left text-xs font-medium text-teal-400 uppercase tracking-wider px-4 py-4">Loose Eggs</th>
+                  <th className="text-left text-xs font-medium text-teal-400 uppercase tracking-wider px-4 py-4">Loose</th>
                   <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4">Total Qty</th>
                   <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4">Avg/Egg</th>
+                  <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4">Payment</th>
                   <th className="text-right text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4">Revenue</th>
                   <th className="text-center text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4"></th>
                 </tr>
@@ -289,17 +388,23 @@ export default function SellPage() {
               <tbody>
                 {sales.map((sale, i) => {
                   const sepc = sale.eggsPerCrate || 30;
+                  const scpb = sale.cratesPerBox || 7;
+                  const sb = sale.boxesSold || 0;
                   const sc = sale.cratesSold || 0;
                   const sl = sale.individualEggs || 0;
+                  const boxRev = sb * (sale.boxSalePrice || 0);
                   const crateRev = sc * (sale.crateSalePrice || 0);
                   const looseRev = sl * (sale.eggSalePrice || 0);
-                  const totalRev = crateRev + looseRev;
-                  const totalEggsCount = (sc * sepc) + sl;
+                  const totalRev = boxRev + crateRev + looseRev;
+                  const totalEggsCount = (sb * scpb * sepc) + (sc * sepc) + sl;
                   const avgPrice = totalEggsCount > 0 ? totalRev / totalEggsCount : 0;
 
                   return (
                     <tr key={sale._id} className={`border-b border-white/5 hover:bg-white/5 transition-colors duration-150 ${i % 2 === 0 ? "bg-white/[0.02]" : ""}`}>
                       <td className="px-4 py-4 text-sm text-slate-300">{formatDate(sale.date)}</td>
+                      <td className="px-4 py-4 text-sm text-amber-300">
+                        {sb > 0 ? <span>{sb} <span className="text-slate-500 text-xs">(@ ₹{sale.boxSalePrice})</span></span> : "-"}
+                      </td>
                       <td className="px-4 py-4 text-sm text-emerald-300">
                         {sc > 0 ? <span>{sc} <span className="text-slate-500 text-xs">(@ ₹{sale.crateSalePrice})</span></span> : "-"}
                       </td>
@@ -308,6 +413,11 @@ export default function SellPage() {
                       </td>
                       <td className="px-4 py-4 text-sm text-slate-300">{totalEggsCount} eggs</td>
                       <td className="px-4 py-4 text-sm text-slate-400 font-medium">₹{avgPrice.toFixed(2)}</td>
+                      <td className="px-4 py-4 text-sm text-slate-300">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 text-xs font-medium">
+                          {getPaymentLabel(sale.paymentMethod)}
+                        </span>
+                      </td>
                       <td className="px-4 py-4 text-sm text-emerald-400 font-bold text-right">₹{totalRev.toFixed(2)}</td>
                       <td className="px-4 py-3 text-center">
                         <button
