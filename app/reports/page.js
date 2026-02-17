@@ -55,7 +55,8 @@ export default function ReportsPage() {
 
     const jsPDFModule = await import("jspdf");
     const jsPDF = jsPDFModule.default;
-    await import("jspdf-autotable");
+    const { applyPlugin } = await import("jspdf-autotable");
+    applyPlugin(jsPDF);
 
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -70,8 +71,8 @@ export default function ReportsPage() {
     doc.setTextColor(100, 100, 100);
     const periodLabel =
       report.type === "daily"
-        ? `Daily Report — ${formatDate(report.period)}`
-        : `Monthly Report — ${formatMonth(report.period)}`;
+        ? `Daily Report - ${formatDate(report.period)}`
+        : `Monthly Report - ${formatMonth(report.period)}`;
     doc.text(periodLabel, pageWidth / 2, 30, { align: "center" });
 
     // Summary table
@@ -88,7 +89,10 @@ export default function ReportsPage() {
       ["Total Eggs Sold", report.totalEggsSold.toString()],
       ["Sales Revenue", `Rs. ${report.totalSalesRevenue.toFixed(2)}`],
       ["Avg. Sale Price per Egg", `Rs. ${report.avgSalePricePerEgg.toFixed(2)}`],
-      ["Profit / Loss", `Rs. ${report.profit.toFixed(2)}`],
+      ["Profit (Boxes)", `Rs. ${(report.profitBreakdown?.box || 0).toFixed(2)}`],
+      ["Profit (Crates)", `Rs. ${(report.profitBreakdown?.crate || 0).toFixed(2)}`],
+      ["Profit (Individual Eggs)", `Rs. ${(report.profitBreakdown?.loose || 0).toFixed(2)}`],
+      ["Total Profit", `Rs. ${report.profit.toFixed(2)}`],
       ["Current Stock (Eggs)", report.currentStockEggs.toString()],
     ];
 
@@ -123,7 +127,7 @@ export default function ReportsPage() {
           const perEgg = totalEggs > 0 ? totalCost / totalEggs : 0;
           return [
             formatDate(p.date),
-            pb > 0 ? `${pb} (@ Rs.${p.boxPrice} · ${cpb}cr/box)` : "-",
+            pb > 0 ? `${pb} (@ Rs.${p.boxPrice} . ${cpb}cr/box)` : "-",
             pc > 0 ? `${pc} (@ Rs.${Number(p.cratePrice).toFixed(2)})` : "-",
             totalEggs.toString(),
             `Rs. ${perEgg.toFixed(2)}`,
@@ -158,7 +162,8 @@ export default function ReportsPage() {
           const looseRev = sl * (s.eggSalePrice || 0);
           const totalRev = boxRev + crateRev + looseRev;
           const totalEggs = (sb * cpb * epc) + (sc * epc) + sl;
-          const payLabel = (PAYMENT_LABELS[s.paymentMethod] || "Cash").replace(/[📱💵]/g, "").trim();
+          const pm = s.paymentMethod || "cash";
+          const payLabels = { cash: "Cash", gpay: "Google Pay", phonepe: "PhonePe", upi_other: "Other UPI" };
 
           return [
             formatDate(s.date),
@@ -167,7 +172,7 @@ export default function ReportsPage() {
             sl > 0 ? `${sl} (@ Rs.${s.eggSalePrice})` : "-",
             totalEggs.toString(),
             `Rs. ${totalRev.toFixed(2)}`,
-            payLabel,
+            payLabels[pm] || "Cash",
           ];
         }),
         theme: "striped",
@@ -331,6 +336,26 @@ export default function ReportsPage() {
             </button>
           </div>
 
+          {/* Profit Breakdown Cards (NEW) */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-white/5 p-4 rounded-xl border border-white/10">
+             <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
+               <span className="text-xs text-emerald-400 uppercase tracking-wider block">Box Profit</span>
+               <span className="text-lg font-bold text-emerald-300">₹{(report.profitBreakdown?.box || 0).toFixed(2)}</span>
+             </div>
+             <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
+               <span className="text-xs text-emerald-400 uppercase tracking-wider block">Crate Profit</span>
+               <span className="text-lg font-bold text-emerald-300">₹{(report.profitBreakdown?.crate || 0).toFixed(2)}</span>
+             </div>
+             <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
+               <span className="text-xs text-emerald-400 uppercase tracking-wider block">Profit (Individual Eggs)</span>
+               <span className="text-lg font-bold text-emerald-300">₹{(report.profitBreakdown?.loose || 0).toFixed(2)}</span>
+             </div>
+             <div className="bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/50 rounded-lg p-3">
+               <span className="text-xs text-emerald-300 uppercase tracking-wider block font-bold">Total Profit</span>
+               <span className="text-xl font-black text-white">₹{report.profit.toFixed(2)}</span>
+             </div>
+          </div>
+
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {[
@@ -344,12 +369,7 @@ export default function ReportsPage() {
               { label: "Eggs Sold", value: report.totalEggsSold, icon: "🥚", color: "emerald" },
               { label: "Revenue", value: `₹${report.totalSalesRevenue.toFixed(2)}`, icon: "💰", color: "emerald" },
               { label: "Avg Sale/Egg", value: `₹${report.avgSalePricePerEgg.toFixed(2)}`, icon: "🏷️", color: "teal" },
-              {
-                label: "Profit / Loss",
-                value: `₹${report.profit.toFixed(2)}`,
-                icon: report.profit >= 0 ? "📈" : "📉",
-                color: report.profit >= 0 ? "emerald" : "red",
-              },
+              // Removed old Profit/Loss card to avoid duplication with new section above
               { label: "Current Stock", value: `${report.currentStockEggs} eggs`, icon: "🥚", color: "violet" },
             ].map((card, i) => (
               <div

@@ -115,11 +115,68 @@ export async function GET(request) {
     const totalEggsSold = sales.reduce((sum, s) => sum + getSaleEggs(s), 0);
     const totalSalesRevenue = sales.reduce((sum, s) => sum + getSaleRevenue(s), 0);
 
-    const profit = totalSalesRevenue - totalPurchaseCost;
+    // Calculate Lifetime Average Cost Per Egg (CPE) context
+    // We need ALL historical purchases to get a true "Cost Basis"
+    const allPurchasesForCost = await Egg.find({ userId }).lean();
+    const globalTotalEggsPurchased = allPurchasesForCost.reduce((sum, p) => sum + getPurchaseEggs(p), 0);
+    const globalTotalPurchaseCost = allPurchasesForCost.reduce((sum, p) => sum + getPurchaseCost(p), 0);
+    
+    // Weighted Average Cost Per Egg (Global)
+    // If no purchases ever made, default to 0 to avoid Infinity
+    const globalCPE = globalTotalEggsPurchased > 0 ? globalTotalPurchaseCost / globalTotalEggsPurchased : 0;
+
+    // --- Detailed Profit Calculation for Selected Period ---
+    let totalBoxProfit = 0;
+    let totalCrateProfit = 0;
+    let totalLooseProfit = 0;
+
+    // We iterate over the SALES of the selected period
+    sales.forEach((s) => {
+      // 1. Box Sales
+      if (s.boxesSold > 0) {
+        const boxes = s.boxesSold;
+        const salePrice = s.boxSalePrice || 0;
+        // Cost = User's avg cost per egg * eggs in that box
+        const eggsInBox = (s.cratesPerBox || 7) * (s.eggsPerCrate || 30); 
+        const costBasis = eggsInBox * globalCPE;
+        const profitPerBox = salePrice - costBasis;
+        totalBoxProfit += profitPerBox * boxes;
+      }
+
+      // 2. Crate Sales
+      if (s.cratesSold > 0) {
+        const crates = s.cratesSold;
+        const salePrice = s.crateSalePrice || 0;
+        const eggsInCrate = s.eggsPerCrate || 30;
+        const costBasis = eggsInCrate * globalCPE;
+        const profitPerCrate = salePrice - costBasis;
+        totalCrateProfit += profitPerCrate * crates;
+      }
+
+      // 3. Loose Egg Sales
+      if (s.individualEggs > 0) {
+        const looseSales = s.individualEggs;
+        const salePrice = s.eggSalePrice || 0;
+        // Cost Basis per egg is just globalCPE
+        const profitPerEgg = salePrice - globalCPE;
+        totalLooseProfit += profitPerEgg * looseSales;
+      }
+    });
+
+    // Total Profit from all sources
+    const totalProfitDetailed = totalBoxProfit + totalCrateProfit + totalLooseProfit;
+
+    // Calculate averages for response
     const avgPurchasePricePerEgg = totalEggsPurchased > 0 ? totalPurchaseCost / totalEggsPurchased : 0;
     const avgSalePricePerEgg = totalEggsSold > 0 ? totalSalesRevenue / totalEggsSold : 0;
 
-    // Overall stock for this user
+    // Note: The previous logic calculated profit as (Revenue - PeriodPurchaseCost).
+    // This is "Cash Flow" profit, often used in simple cash accounting.
+    // The NEW logic is (Revenue - CostOfGoodsSold), which is "Accrual" profit.
+    // We will return the NEW detailed profit as the primary 'profit' metric, 
+    // but we can keep the old one as 'cashFlow' if needed, or just replace it.
+    // Let's replace 'profit' with the more accurate CoGS-based profit.
+
     const allPurchases = await Egg.find({ userId }).lean();
     const allSales = await Sale.find({ userId }).lean();
     const allEggsPurchased = allPurchases.reduce((sum, p) => sum + getPurchaseEggs(p), 0);
@@ -141,7 +198,13 @@ export async function GET(request) {
         totalEggsSold,
         totalSalesRevenue,
         avgSalePricePerEgg,
-        profit,
+        profit: totalProfitDetailed, // Updated to use CoGS logic
+        profitBreakdown: {
+            box: totalBoxProfit,
+            crate: totalCrateProfit,
+            loose: totalLooseProfit
+        },
+        globalCPE, // sending this might be useful for debugging/UI
         currentStockEggs,
         purchases,
         sales,
