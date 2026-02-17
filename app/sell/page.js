@@ -374,7 +374,8 @@ export default function SellPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-white/10">
-                  <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4">Date</th>
+                  <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4">S.No.</th>
+                  <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-4 py-4">Date & Time</th>
                   <th className="text-left text-xs font-medium text-amber-400 uppercase tracking-wider px-4 py-4">Boxes</th>
                   <th className="text-left text-xs font-medium text-emerald-400 uppercase tracking-wider px-4 py-4">Crates</th>
                   <th className="text-left text-xs font-medium text-teal-400 uppercase tracking-wider px-4 py-4">Loose</th>
@@ -398,10 +399,30 @@ export default function SellPage() {
                   const totalRev = boxRev + crateRev + looseRev;
                   const totalEggsCount = (sb * scpb * sepc) + (sc * sepc) + sl;
                   const avgPrice = totalEggsCount > 0 ? totalRev / totalEggsCount : 0;
+                  
+                  // Serial Number Calculation (Descending Order: Latest is highest number)
+                  // If sales is [Newest, ..., Oldest], then:
+                  const serialNumber = sales.length - i;
+                  
+                  const dateObj = new Date(sale.date);
+                  // Check if date is valid
+                  const isValidDate = !isNaN(dateObj.getTime());
+                  const formattedDate = isValidDate 
+                    ? dateObj.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+                    : "Invalid Date";
+                  const formattedTime = isValidDate
+                    ? dateObj.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+                    : "";
 
                   return (
                     <tr key={sale._id} className={`border-b border-white/5 hover:bg-white/5 transition-colors duration-150 ${i % 2 === 0 ? "bg-white/[0.02]" : ""}`}>
-                      <td className="px-4 py-4 text-sm text-slate-300">{formatDate(sale.date)}</td>
+                      <td className="px-4 py-4 text-sm font-medium text-slate-400">#{serialNumber}</td>
+                      <td className="px-4 py-4 text-sm text-slate-300">
+                        <div className="flex flex-col">
+                          <span>{formattedDate}</span>
+                          <span className="text-xs text-slate-500">{formattedTime}</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-4 text-sm text-amber-300">
                         {sb > 0 ? <span>{sb} <span className="text-slate-500 text-xs">(@ ₹{sale.boxSalePrice})</span></span> : "-"}
                       </td>
