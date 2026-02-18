@@ -42,7 +42,7 @@ function getSaleEggs(s) {
   return total;
 }
 
-export async function GET() {
+export async function GET(request) {
   try {
     await connectDB();
     const userId = await getUserId();
@@ -50,7 +50,28 @@ export async function GET() {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    const sales = await Sale.find({ userId }).lean().sort({ date: -1 });
+    const { searchParams } = new URL(request.url);
+    const dateParam = searchParams.get("date"); // YYYY-MM-DD
+
+    // 1. Get total count for serial numbers
+    const totalSalesCount = await Sale.countDocuments({ userId });
+
+    // 2. Build query filter
+    let query = { userId };
+    if (dateParam) {
+      const startDate = new Date(dateParam);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(dateParam);
+      endDate.setHours(23, 59, 59, 999);
+      
+      query.date = {
+        $gte: startDate,
+        $lte: endDate
+      };
+    }
+
+    // 3. Fetch sales sorted by creation time (newest first)
+    const sales = await Sale.find(query).lean().sort({ createdAt: -1 });
 
     // Calculate current stock for this user
     const purchases = await Egg.find({ userId }).lean();
@@ -68,6 +89,7 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       data: sales,
+      totalSalesCount, // Send total count to frontend
       currentStockEggs,
     });
   } catch (error) {

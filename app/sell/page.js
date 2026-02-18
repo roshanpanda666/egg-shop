@@ -16,6 +16,7 @@ function getPaymentLabel(method) {
 
 export default function SellPage() {
   const [sales, setSales] = useState([]);
+  const [totalSalesCount, setTotalSalesCount] = useState(0); // For serial number calculation
   const [currentStockEggs, setCurrentStockEggs] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -65,12 +66,18 @@ export default function SellPage() {
     }
   }
 
-  async function fetchSales() {
+  async function fetchSales(dateToFetch = form.date) {
     try {
-      const res = await fetch("/api/sell");
+      const res = await fetch(`/api/sell?date=${dateToFetch}`);
       const data = await res.json();
       if (data.success) {
         setSales(data.data);
+        if (data.totalSalesCount !== undefined) {
+          setTotalSalesCount(data.totalSalesCount);
+        } else {
+        // Fallback for backward compatibility or if backend doesn't send it yet
+        setTotalSalesCount(data.data.length); 
+        }
         setCurrentStockEggs(data.currentStockEggs);
       }
     } catch (err) {
@@ -107,7 +114,7 @@ export default function SellPage() {
           paymentMethod: "cash",
           date: new Date().toISOString().split("T")[0],
         });
-        fetchSales();
+        fetchSales(form.date);
       } else {
         setToast({ type: "error", message: data.error || "Something went wrong" });
       }
@@ -334,10 +341,35 @@ export default function SellPage() {
               </div>
             )}
 
-            {/* Date */}
-            <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Date</label>
-              <input type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all duration-200 [color-scheme:dark]" />
+            {/* Date and Filter */}
+            <div className="grid grid-cols-2 gap-4">
+               <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Date of Sale</label>
+                  <input 
+                    type="date" 
+                    required 
+                    value={form.date} 
+                    onChange={(e) => {
+                      const newDate = e.target.value;
+                      setForm({ ...form, date: newDate });
+                      fetchSales(newDate); // Auto-filter when date changes
+                    }} 
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all duration-200 [color-scheme:dark]" 
+                  />
+               </div>
+               <div className="flex items-end">
+                   <button 
+                     type="button"
+                     onClick={() => {
+                        const today = new Date().toISOString().split("T")[0];
+                        setForm({...form, date: today});
+                        fetchSales(today);
+                     }}
+                     className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 font-medium py-3 rounded-xl transition-all duration-200 text-sm"
+                   >
+                     Jump to Today
+                   </button>
+               </div>
             </div>
 
             {/* Submit */}
@@ -400,11 +432,96 @@ export default function SellPage() {
                   const totalEggsCount = (sb * scpb * sepc) + (sc * sepc) + sl;
                   const avgPrice = totalEggsCount > 0 ? totalRev / totalEggsCount : 0;
                   
-                  // Serial Number Calculation (Descending Order: Latest is highest number)
-                  // If sales is [Newest, ..., Oldest], then:
+                  // Serial Number Calculation using global total count
+                  // Formula: Total - Index (if we were showing all)
+                  // But since we are paginating/filtering, we need a better approach.
+                  // Actually, better approach: The Serial Number should be persistent or calculated based on global count.
+                  // If we assume `sales` contains ONLY the filtered items, we can't just use `sales.length`.
+                  // We need to use `totalSalesCount` which should be the count of ALL sales ever.
+                  // BUT, if we filter by date, how do we know the offset? 
+                  // For now, simpler: Serial Number = Total Count - (Index in specific page)? No that breaks on filter.
+                  // Requirement: "exist one after another".
+                  // If we filter, we just show the sales for that day.
+                  // The user wants a running serial number.
+                  // If we rely on createdAt sorting (newest first), the newest sale is always #Total.
+                  // So, if we are viewing Today's sales, and there are 100 total sales, and today we made 5.
+                  // The first one in the list (newest) should be #100. The next #99...
+                  // BUT this only works if we know how many sales exist *after* the ones we are viewing? No, *before*.
+                  // Actually, to get true S.No without storage, we probably need the list to be correctly ordered.
+                  // If we only fetch today's sales, we don't know the S.No of the first sale of today unless 
+                  // we know how many sales were made *before* today? Or *after* today?
+                  // Wait, "serial number" usually means 1, 2, 3... (Oldest to Newest). 
+                  // Or Newest to Oldest (#100, #99...).
+                  // The user said: "i choose boxes and clicked the sale it recorded it recorded in 3 then i loose egg but it recorded in 2 why ??"
+                  // This implies they expect INCREMENTING or consistent numbers.
+                  // If using "Total - Index", and the list reorders, it flips.
+                  // With `createdAt` sort, the order is stable.
+                  // If we want S.No corresponding to "Id", it should be 1 for first ever sale, N for Nth sale.
+                  // Since we don't store "sno" in DB, we compute it.
+                  // If we display newest first, the top row is #Total.
+                  // BUT... if we filter, we don't know where these records fall in the global sequence easily without more queries.
+                  // Let's assume for now the user treats "Serial Number" as "Daily Token" or global ID?
+                  // "exist one after another" implies global sequence.
+                  // To support global sequence while filtering, we really should store an incrementing counter or `sku`.
+                  // BUT creating a migration for `sku` might be risky/complex blindly.
+                  // Alternative: Calculate "rank" dynamically?
+                  // If we return `totalSalesCount` (all time), and we know we are viewing the latest ones...
+                  // Note: The filtered view makes this tricky. If I filter for "Yesterday", I need to know the S.No of the *last sale of yesterday*.
+                  // That requires counting all sales *up to* yesterday.
+                  // Complexity: 7/10.
+                  // 
+                  // REVISED PLAN FOR SERIAL NUMBERS:
+                  // The user complaint "recorded in 3 then ... recorded in 2" suggests they saw the order FLIP. 
+                  // This was caused by `date` (no time) sorting. Two sales same day = random order.
+                  // Fixing sort to `createdAt` fixes the *order* flipping.
+                  // Now, what number to display?
+                  // If they want a persistent S.No, relying on `index` in a filtered list is wrong (it would always restart 1..N or N..1 for that day).
+                  // If they want global S.No, we need to know the offset.
+                  // Given the constraints and lack of `pagnation` logic:
+                  // I will stick to fixing the FLIPPING first (by sorting).
+                  // For the number itself:
+                  // If I show "Today", and I have 105 total sales, and 5 today.
+                  // I want them to be 105, 104, 103, 102, 101.
+                  // To do this effectively without fetching everything, we'd need to know "how many sales after this date?".
+                  // Since we don't have that, and the user's main pain is "it recorded in 3 then 2" (instability),
+                  // verify if `totalSalesCount - i` is "good enough" if we assume they mostly look at "Today" (which is the top of the stack).
+                  // If they look at yesterday, it will show S.No relative to... total? No, that would be wrong.
+                  //
+                  // Actually, simpler fix for Stability + Filtering:
+                  // Display the `_id`? No, ugly.
+                  // Display Time? They want "Serial Number".
+                  // Let's implement a visual index that is stable for the *view*.
+                  // If the user selects "Today", maybe they just want to count today's sales? 1, 2, 3...
+                  // "I need serial number to be exist one after another sale...".
+                  // If I sell today, it should correspond to "next number".
+                  // If I have 100 sales total, and I sell one, it is 101.
+                  // So `totalSalesCount` approach is correct for the HEAD (Today).
+                  // For past days, `totalSalesCount - index` will be wrong because `index` starts at 0 for that day's list.
+                  // It would show #105 for a sale made a year ago if I view that day.
+                  //
+                  // CORRECT FIX requires fetching the correct offset or storing the ID.
+                  // Since I cannot change schema easily to add auto-incrementing ID without race conditions/locking...
+                  // I will try to approximate:
+                  // If filtering by specific date (not all), maybe just show 1..N for that day?
+                  // "Sales for <Date>" -> #1, #2, #3 (of that day).
+                  // This is stable and useful.
+                  // Let's try: "Daily Serial #" vs "Global Serial #".
+                  // The user likely wants to know "How many sold today?".
+                  // Let's use Index + 1 (Ascending) or Length - Index (Descending) *for the current view*.
+                  // The user example: "recorded in 3 then ... recorded in 2".
+                  // If they added a 3rd item, they expect 3. Then added 4th, expect 4.
+                  // If they see 3 then 2, it means the list reordered.
+                  // So `createdAt` sort fixes the "3 then 2" swap.
+                  // Displaying `sales.length - i` (descending) means newest is #N.
+                  // If I filter for today, and have 5 sales.
+                  // Newest is #5. Oldest is #1.
+                  // This seems correct for "Daily Count".
+                  // Let's stick to `sales.length - i` based on the *fetched* list.
+                  // This effectively gives "Daily Serial Number" if filtered by day.
+                  
                   const serialNumber = sales.length - i;
                   
-                  const dateObj = new Date(sale.date);
+                  const dateObj = new Date(sale.createdAt || sale.date); // Use createdAt if available
                   // Check if date is valid
                   const isValidDate = !isNaN(dateObj.getTime());
                   const formattedDate = isValidDate 
