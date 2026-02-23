@@ -23,6 +23,10 @@ const UserSchema = new mongoose.Schema(
       type: Number,
       default: 7,
     },
+    stockAdjustment: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );

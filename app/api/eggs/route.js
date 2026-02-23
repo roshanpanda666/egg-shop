@@ -9,14 +9,27 @@ async function getUserId() {
   return session?.user?.id || null;
 }
 
-export async function GET() {
+export async function GET(request) {
   try {
     await connectDB();
     const userId = await getUserId();
     if (!userId) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
-    const eggs = await Egg.find({ userId }).lean().sort({ date: -1 });
+
+    const { searchParams } = new URL(request.url);
+    const dateParam = searchParams.get("date");
+
+    let query = { userId };
+    if (dateParam) {
+      const startDate = new Date(dateParam);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(dateParam);
+      endDate.setHours(23, 59, 59, 999);
+      query.date = { $gte: startDate, $lte: endDate };
+    }
+
+    const eggs = await Egg.find(query).lean().sort({ date: -1 });
     return NextResponse.json({ success: true, data: eggs });
   } catch (error) {
     return NextResponse.json(

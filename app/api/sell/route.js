@@ -1,6 +1,7 @@
 import connectDB from "@/app/lib/db";
 import Egg from "@/app/models/Egg";
 import Sale from "@/app/models/Sale";
+import User from "@/app/models/User";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { NextResponse } from "next/server";
@@ -84,12 +85,15 @@ export async function GET(request) {
       (sum, s) => sum + getSaleEggs(s), 0
     );
 
-    const currentStockEggs = totalEggsPurchased - totalEggsSold;
+    const user = await User.findById(userId).select("stockAdjustment");
+    const stockAdjustment = user?.stockAdjustment || 0;
+
+    const currentStockEggs = totalEggsPurchased - totalEggsSold + stockAdjustment;
 
     return NextResponse.json({
       success: true,
       data: sales,
-      totalSalesCount, // Send total count to frontend
+      totalSalesCount,
       currentStockEggs,
     });
   } catch (error) {
@@ -174,7 +178,10 @@ export async function POST(request) {
       (sum, s) => sum + getSaleEggs(s), 0
     );
 
-    const currentStockEggs = totalEggsPurchased - totalEggsSold;
+    const user = await User.findById(userId).select("stockAdjustment");
+    const stockAdjustment = user?.stockAdjustment || 0;
+
+    const currentStockEggs = totalEggsPurchased - totalEggsSold + stockAdjustment;
     const boxEggs = numBoxes * numCPB * numEPC;
     const crateEggs = numCrates * numEPC;
     const totalEggsToSell = boxEggs + crateEggs + numIndividual;
@@ -240,6 +247,54 @@ export async function DELETE(request) {
     }
 
     return NextResponse.json({ success: true, message: "Sale deleted" });
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request) {
+  try {
+    await connectDB();
+    const userId = await getUserId();
+    if (!userId) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { newStock } = body;
+
+    if (newStock == null || isNaN(Number(newStock))) {
+      return NextResponse.json(
+        { success: false, error: "A valid stock value is required" },
+        { status: 400 }
+      );
+    }
+
+    const desiredStock = Number(newStock);
+
+    // Calculate current computed stock (without adjustment)
+    const purchases = await Egg.find({ userId }).lean();
+    const totalEggsPurchased = purchases.reduce(
+      (sum, p) => sum + getPurchaseEggs(p), 0
+    );
+
+    const allSales = await Sale.find({ userId }).lean();
+    const totalEggsSold = allSales.reduce(
+      (sum, s) => sum + getSaleEggs(s), 0
+    );
+
+    const computedStock = totalEggsPurchased - totalEggsSold;
+    const newAdjustment = desiredStock - computedStock;
+
+    await User.findByIdAndUpdate(userId, { stockAdjustment: newAdjustment });
+
+    return NextResponse.json({
+      success: true,
+      currentStockEggs: desiredStock,
+    });
   } catch (error) {
     return NextResponse.json(
       { success: false, error: error.message },

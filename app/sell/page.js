@@ -23,6 +23,9 @@ export default function SellPage() {
   const [toast, setToast] = useState(null);
   const [defaultEggsPerCrate, setDefaultEggsPerCrate] = useState(30);
   const [defaultCratesPerBox, setDefaultCratesPerBox] = useState(7);
+  const [editingStock, setEditingStock] = useState(false);
+  const [stockInput, setStockInput] = useState("");
+  const [savingStock, setSavingStock] = useState(false);
   const [form, setForm] = useState({
     boxesSold: "",
     boxSalePrice: "",
@@ -197,9 +200,72 @@ export default function SellPage() {
         <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl shadow-black/20 overflow-hidden">
           <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none" />
           <div className="relative flex items-center justify-between">
-            <div>
+            <div className="flex-1">
               <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Current Stock</p>
-              <p className="text-3xl font-bold text-white">{loading ? "..." : `${currentStockEggs} eggs`}</p>
+              {editingStock ? (
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="number"
+                    min="0"
+                    value={stockInput}
+                    onChange={(e) => setStockInput(e.target.value)}
+                    className="w-32 bg-white/10 border border-emerald-500/30 rounded-lg px-3 py-2 text-2xl font-bold text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all duration-200"
+                    autoFocus
+                  />
+                  <span className="text-lg text-slate-400">eggs</span>
+                  <button
+                    onClick={async () => {
+                      if (!stockInput || isNaN(Number(stockInput))) return;
+                      setSavingStock(true);
+                      try {
+                        const res = await fetch("/api/sell", {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ newStock: Number(stockInput) }),
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                          setCurrentStockEggs(data.currentStockEggs);
+                          setEditingStock(false);
+                          setToast({ type: "success", message: "Stock updated!" });
+                        } else {
+                          setToast({ type: "error", message: data.error || "Failed to update stock" });
+                        }
+                      } catch (err) {
+                        setToast({ type: "error", message: "Network error" });
+                      } finally {
+                        setSavingStock(false);
+                      }
+                    }}
+                    disabled={savingStock}
+                    className="px-3 py-2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-sm font-medium hover:bg-emerald-500/30 transition-all duration-200 disabled:opacity-50"
+                  >
+                    {savingStock ? "..." : "✓"}
+                  </button>
+                  <button
+                    onClick={() => setEditingStock(false)}
+                    className="px-3 py-2 bg-white/5 text-slate-400 border border-white/10 rounded-lg text-sm font-medium hover:bg-white/10 transition-all duration-200"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <p className="text-3xl font-bold text-white">{loading ? "..." : `${currentStockEggs} eggs`}</p>
+                  {!loading && (
+                    <button
+                      onClick={() => {
+                        setStockInput(String(currentStockEggs));
+                        setEditingStock(true);
+                      }}
+                      className="px-2 py-1 bg-white/5 text-slate-400 border border-white/10 rounded-lg text-xs font-medium hover:bg-white/10 hover:text-white transition-all duration-200"
+                      title="Edit stock"
+                    >
+                      ✏️ Edit
+                    </button>
+                  )}
+                </div>
+              )}
               <p className="text-sm text-slate-400 mt-1">
                 {loading ? "" : `≈ ${stockBoxes} boxes · ${stockCrates} crates (${cpb} crates/box · ${epc} eggs/crate)`}
               </p>

@@ -51,7 +51,8 @@ export default function Home() {
 
   async function fetchEntries() {
     try {
-      const res = await fetch("/api/eggs");
+      const today = new Date().toISOString().split("T")[0];
+      const res = await fetch(`/api/eggs?date=${today}`);
       const data = await res.json();
       if (data.success) setEntries(data.data);
     } catch (err) {
@@ -348,7 +349,7 @@ export default function Home() {
       {/* Entries Table */}
       <div className="w-full max-w-5xl">
         <h2 className="text-lg font-semibold text-white/90 mb-4">
-          Recent Entries
+          Today's Entries
         </h2>
 
         {loading ? (
