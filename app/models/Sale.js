@@ -36,7 +36,7 @@ const SaleSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ["cash", "gpay", "phonepe", "upi_other"],
+      enum: ["cash", "gpay", "phonepe", "upi_other", "balance"],
       default: "cash",
     },
     date: {

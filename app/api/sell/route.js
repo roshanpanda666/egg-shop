@@ -135,7 +135,7 @@ export async function POST(request) {
     const numCratePrice = Number(crateSalePrice) || 0;
     const numEggPrice = Number(eggSalePrice) || 0;
     const numBoxPrice = Number(boxSalePrice) || 0;
-    const payment = ["cash", "gpay", "phonepe", "upi_other"].includes(paymentMethod)
+    const payment = ["cash", "gpay", "phonepe", "upi_other", "balance"].includes(paymentMethod)
       ? paymentMethod
       : "cash";
 

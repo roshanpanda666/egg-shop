@@ -7,6 +7,7 @@ const PAYMENT_METHODS = [
   { value: "gpay", label: "📱 Google Pay", color: "blue" },
   { value: "phonepe", label: "📱 PhonePe", color: "purple" },
   { value: "upi_other", label: "📱 Other UPI", color: "cyan" },
+  { value: "balance", label: "📒 Balance", color: "amber" },
 ];
 
 function getPaymentLabel(method) {
@@ -24,8 +25,12 @@ export default function SellPage() {
   const [defaultEggsPerCrate, setDefaultEggsPerCrate] = useState(30);
   const [defaultCratesPerBox, setDefaultCratesPerBox] = useState(7);
   const [editingStock, setEditingStock] = useState(false);
-  const [stockInput, setStockInput] = useState("");
+  const [stockBoxesInput, setStockBoxesInput] = useState("");
+  const [stockCratesInput, setStockCratesInput] = useState("");
+  const [stockEggsInput, setStockEggsInput] = useState("");
   const [savingStock, setSavingStock] = useState(false);
+  const [stockView, setStockView] = useState("eggs");
+  const [historyDate, setHistoryDate] = useState(new Date().toISOString().split("T")[0]);
   const [form, setForm] = useState({
     boxesSold: "",
     boxSalePrice: "",
@@ -69,7 +74,7 @@ export default function SellPage() {
     }
   }
 
-  async function fetchSales(dateToFetch = form.date) {
+  async function fetchSales(dateToFetch = historyDate) {
     try {
       const res = await fetch(`/api/sell?date=${dateToFetch}`);
       const data = await res.json();
@@ -199,63 +204,20 @@ export default function SellPage() {
       <div className="w-full max-w-lg mb-8">
         <div className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl shadow-black/20 overflow-hidden">
           <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5 pointer-events-none" />
-          <div className="relative flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Current Stock</p>
-              {editingStock ? (
-                <div className="flex items-center gap-2 mt-1">
-                  <input
-                    type="number"
-                    min="0"
-                    value={stockInput}
-                    onChange={(e) => setStockInput(e.target.value)}
-                    className="w-32 bg-white/10 border border-emerald-500/30 rounded-lg px-3 py-2 text-2xl font-bold text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all duration-200"
-                    autoFocus
-                  />
-                  <span className="text-lg text-slate-400">eggs</span>
-                  <button
-                    onClick={async () => {
-                      if (!stockInput || isNaN(Number(stockInput))) return;
-                      setSavingStock(true);
-                      try {
-                        const res = await fetch("/api/sell", {
-                          method: "PUT",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ newStock: Number(stockInput) }),
-                        });
-                        const data = await res.json();
-                        if (data.success) {
-                          setCurrentStockEggs(data.currentStockEggs);
-                          setEditingStock(false);
-                          setToast({ type: "success", message: "Stock updated!" });
-                        } else {
-                          setToast({ type: "error", message: data.error || "Failed to update stock" });
-                        }
-                      } catch (err) {
-                        setToast({ type: "error", message: "Network error" });
-                      } finally {
-                        setSavingStock(false);
-                      }
-                    }}
-                    disabled={savingStock}
-                    className="px-3 py-2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-sm font-medium hover:bg-emerald-500/30 transition-all duration-200 disabled:opacity-50"
-                  >
-                    {savingStock ? "..." : "✓"}
-                  </button>
-                  <button
-                    onClick={() => setEditingStock(false)}
-                    className="px-3 py-2 bg-white/5 text-slate-400 border border-white/10 rounded-lg text-sm font-medium hover:bg-white/10 transition-all duration-200"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : (
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Current Stock</p>
                 <div className="flex items-center gap-3">
-                  <p className="text-3xl font-bold text-white">{loading ? "..." : `${currentStockEggs} eggs`}</p>
-                  {!loading && (
+                  <p className="text-3xl font-bold text-white">
+                    {loading ? "..." : stockView === "boxes" ? `${stockBoxes} boxes` : stockView === "crates" ? `${stockCrates} crates` : `${currentStockEggs} eggs`}
+                  </p>
+                  {!loading && !editingStock && (
                     <button
                       onClick={() => {
-                        setStockInput(String(currentStockEggs));
+                        setStockBoxesInput("");
+                        setStockCratesInput("");
+                        setStockEggsInput(String(currentStockEggs));
                         setEditingStock(true);
                       }}
                       className="px-2 py-1 bg-white/5 text-slate-400 border border-white/10 rounded-lg text-xs font-medium hover:bg-white/10 hover:text-white transition-all duration-200"
@@ -265,12 +227,114 @@ export default function SellPage() {
                     </button>
                   )}
                 </div>
-              )}
-              <p className="text-sm text-slate-400 mt-1">
-                {loading ? "" : `≈ ${stockBoxes} boxes · ${stockCrates} crates (${cpb} crates/box · ${epc} eggs/crate)`}
-              </p>
+                {!loading && (
+                  <div className="flex gap-1.5 mt-2">
+                    {[{key: "boxes", label: "📦 Boxes", color: "amber"}, {key: "crates", label: "🗃️ Crates", color: "emerald"}, {key: "eggs", label: "🥚 Eggs", color: "teal"}].map((v) => (
+                      <button
+                        key={v.key}
+                        onClick={() => setStockView(v.key)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
+                          stockView === v.key
+                            ? v.color === "amber" ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                            : v.color === "emerald" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                            : "bg-teal-500/20 text-teal-300 border border-teal-500/30"
+                            : "bg-white/5 text-slate-500 border border-white/10 hover:text-slate-300 hover:bg-white/10"
+                        }`}
+                      >
+                        {v.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <p className="text-sm text-slate-400 mt-1.5">
+                  {loading ? "" : `${stockBoxes} boxes · ${stockCrates} crates · ${currentStockEggs} eggs (${cpb}cr/box · ${epc}eggs/cr)`}
+                </p>
+              </div>
+              <div className={`text-5xl ${currentStockEggs > 100 ? "opacity-100" : currentStockEggs > 30 ? "opacity-70" : "opacity-40"}`}>🥚</div>
             </div>
-            <div className={`text-5xl ${currentStockEggs > 100 ? "opacity-100" : currentStockEggs > 30 ? "opacity-70" : "opacity-40"}`}>🥚</div>
+
+            {editingStock && (() => {
+              const editBoxes = Number(stockBoxesInput) || 0;
+              const editCrates = Number(stockCratesInput) || 0;
+              const editEggs = Number(stockEggsInput) || 0;
+              const totalNewStock = (editBoxes * cpb * epc) + (editCrates * epc) + editEggs;
+              return (
+                <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
+                  <p className="text-xs font-medium text-emerald-400 uppercase tracking-wider">Set Stock</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">📦 Boxes</label>
+                      <input
+                        type="number" min="0" value={stockBoxesInput}
+                        onChange={(e) => setStockBoxesInput(e.target.value)}
+                        placeholder="0"
+                        className="w-full bg-white/10 border border-amber-500/30 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all duration-200"
+                      />
+                      {editBoxes > 0 && <p className="text-xs text-slate-500 mt-1">= {editBoxes * cpb * epc} eggs</p>}
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">🗃️ Crates</label>
+                      <input
+                        type="number" min="0" value={stockCratesInput}
+                        onChange={(e) => setStockCratesInput(e.target.value)}
+                        placeholder="0"
+                        className="w-full bg-white/10 border border-emerald-500/30 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all duration-200"
+                      />
+                      {editCrates > 0 && <p className="text-xs text-slate-500 mt-1">= {editCrates * epc} eggs</p>}
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">🥚 Eggs</label>
+                      <input
+                        type="number" min="0" value={stockEggsInput}
+                        onChange={(e) => setStockEggsInput(e.target.value)}
+                        placeholder="0"
+                        className="w-full bg-white/10 border border-teal-500/30 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/50 transition-all duration-200"
+                      />
+                    </div>
+                  </div>
+                  {totalNewStock > 0 && (
+                    <p className="text-sm text-emerald-400 font-medium">New stock will be: {totalNewStock} eggs</p>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        if (totalNewStock <= 0) return;
+                        setSavingStock(true);
+                        try {
+                          const res = await fetch("/api/sell", {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ newStock: totalNewStock }),
+                          });
+                          const data = await res.json();
+                          if (data.success) {
+                            setCurrentStockEggs(data.currentStockEggs);
+                            setEditingStock(false);
+                            setToast({ type: "success", message: "Stock updated!" });
+                          } else {
+                            setToast({ type: "error", message: data.error || "Failed to update stock" });
+                          }
+                        } catch (err) {
+                          setToast({ type: "error", message: "Network error" });
+                        } finally {
+                          setSavingStock(false);
+                        }
+                      }}
+                      disabled={savingStock || totalNewStock <= 0}
+                      className="flex-1 py-2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-sm font-medium hover:bg-emerald-500/30 transition-all duration-200 disabled:opacity-50"
+                    >
+                      {savingStock ? "Saving..." : "✓ Update Stock"}
+                    </button>
+                    <button
+                      onClick={() => setEditingStock(false)}
+                      className="px-4 py-2 bg-white/5 text-slate-400 border border-white/10 rounded-lg text-sm font-medium hover:bg-white/10 transition-all duration-200"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
           {!loading && currentStockEggs <= 30 && currentStockEggs > 0 && (
             <p className="relative text-xs text-amber-400 mt-3">⚠️ Stock is running low!</p>
@@ -361,6 +425,8 @@ export default function SellPage() {
                           ? "bg-blue-500/20 text-blue-300 border border-blue-500/30 shadow-inner shadow-blue-500/10"
                           : pm.color === "purple"
                           ? "bg-purple-500/20 text-purple-300 border border-purple-500/30 shadow-inner shadow-purple-500/10"
+                          : pm.color === "amber"
+                          ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-inner shadow-amber-500/10"
                           : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-inner shadow-cyan-500/10"
                         : "bg-white/5 text-slate-400 border border-white/10 hover:bg-white/10"
                     }`}
@@ -457,7 +523,34 @@ export default function SellPage() {
 
       {/* Sales History */}
       <div className="w-full max-w-6xl">
-        <h2 className="text-lg font-semibold text-white/90 mb-4">Sales History</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-white/90">Sales History</h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const today = new Date().toISOString().split("T")[0];
+                setHistoryDate(today);
+                fetchSales(today);
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                historyDate === new Date().toISOString().split("T")[0]
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                  : "bg-white/5 text-slate-400 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              Today
+            </button>
+            <input
+              type="date"
+              value={historyDate}
+              onChange={(e) => {
+                setHistoryDate(e.target.value);
+                fetchSales(e.target.value);
+              }}
+              className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all duration-200 [color-scheme:dark]"
+            />
+          </div>
+        </div>
 
         {loading ? (
           <div className="flex justify-center py-12">
